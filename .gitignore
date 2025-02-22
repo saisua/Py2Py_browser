@@ -1,0 +1,6 @@
+.cursorignore
+todos
+.p2p
+/data
+__pycache__
+/files_to_upload/*
