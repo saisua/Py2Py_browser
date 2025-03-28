@@ -1,6 +1,12 @@
 import asyncio
 
-from config import UPLOAD_FILES
+from config import (
+    UPLOAD_FILES,
+    SERVER_ID,
+)
+
+from communication.communication import Communication
+from communication.concurrency_layers import ThreadLayer
 
 from p2p.server import AsyncBsonServer
 
@@ -20,7 +26,10 @@ async def main():
     else:
         upload_files_task = None
 
-    server = AsyncBsonServer(session_maker)
+    comm = Communication()
+
+    server_user = comm.add_user(SERVER_ID, ThreadLayer(1))
+    server = AsyncBsonServer(session_maker, server_user)
     server.start()
     input('Press Enter to stop...\n')
     server.stop()

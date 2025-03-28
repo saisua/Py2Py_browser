@@ -1,15 +1,23 @@
 import random
-from sqlalchemy import select
+from datetime import datetime
+import asyncio
+import logging
 
-from signal_protocol import curve, identity_key, state, storage
+from sqlalchemy import select, update, delete
+
+from signal_protocol import curve, identity_key
+
+from config import PEERTYPE_MYSELF
 
 from db.peers import Peers
 
-from db.utils.execute import execute
+from db.utils.execute import _session_execute
 from db.utils.add import _session_add
 
 
 def _generate_encryption_keys():
+    logging.debug("Generating encryption keys")
+
     identity_key_pair = identity_key.IdentityKeyPair.generate()
     registration_id = random.randint(1, 16384)
     signed_pre_key_id = random.randint(1, 1000)
@@ -17,6 +25,7 @@ def _generate_encryption_keys():
     pre_key_id = random.randint(1, 1000)
     pre_key_pair = curve.KeyPair.generate()
     timestamp = 0
+    sid = random.randint(1, 2 ** 32 - 1)
     return (
         identity_key_pair,
         registration_id,
@@ -24,49 +33,29 @@ def _generate_encryption_keys():
         signed_pre_key_pair,
         pre_key_id,
         pre_key_pair,
-        timestamp
-    )
-
-
-def _load_encryption_keys(own_peer):
-    identity_key_pair = identity_key.IdentityKeyPair.from_bytes(
-        own_peer.identity_key
-    )
-    registration_id = own_peer.registration_id
-    signed_pre_key_id = own_peer.signed_pre_key_id
-    signed_pre_key_pair = curve.KeyPair.from_public_and_private(
-        own_peer.signed_pre_key_pub,
-        own_peer.signed_pre_key
-    )
-    pre_key_id = own_peer.pre_key_id
-    pre_key_pair = curve.KeyPair.from_public_and_private(
-        own_peer.pre_key_pub,
-        own_peer.pre_key
-    )
-    timestamp = own_peer.timestamp
-    return (
-        identity_key_pair,
-        registration_id,
-        signed_pre_key_id,
-        signed_pre_key_pair,
-        pre_key_id,
-        pre_key_pair,
-        timestamp
+        timestamp,
+        sid,
     )
 
 
 async def _store_encryption_keys(
         session_maker,
+        address,
         identity_key_pair,
         registration_id,
         signed_pre_key_id,
         signed_pre_key_pair,
         pre_key_id,
         pre_key_pair,
-        timestamp
+        timestamp,
+        sid
         ) -> None:
+    logging.debug("Storing encryption keys in peer")
+
     new_own_peer = Peers(
-        ROWID=0,
+        address=address,
+        checked_time=datetime.now(),
+        type=PEERTYPE_MYSELF,
         identity_key=identity_key_pair.serialize(),
         registration_id=registration_id,
         signed_pre_key_id=signed_pre_key_id,
@@ -75,65 +64,91 @@ async def _store_encryption_keys(
         pre_key_id=pre_key_id,
         pre_key_pub=pre_key_pair.public_key().serialize(),
         pre_key=pre_key_pair.private_key().serialize(),
-        timestamp=timestamp
+        timestamp=timestamp,
+        sid=sid,
     )
     await _session_add(session_maker, new_own_peer)
 
 
-async def initialize_encryption(session_maker):
-    # If exists peer in rowid 0, deserialize its data
-    own_peer = await execute(
-        session_maker,
-        select(Peers).where(Peers.ROWID == 0)
-    )
-    own_peer_data = own_peer.scalar()
+async def initialize_encryption(session_maker, address):
+    logging.debug("Initializing encryption")
 
-    if own_peer_data is not None:
-        (
-            identity_key_pair,
-            registration_id,
-            signed_pre_key_id,
-            signed_pre_key_pair,
-            pre_key_id,
-            pre_key_pair,
-            timestamp
-        ) = _load_encryption_keys(own_peer_data)
-    else:
-        (
-            identity_key_pair,
-            registration_id,
-            signed_pre_key_id,
-            signed_pre_key_pair,
-            pre_key_id,
-            pre_key_pair,
-            timestamp
-        ) = _generate_encryption_keys()
-        await _store_encryption_keys(
+    # If exists peer in rowid 0, deserialize its data
+    own_peer, own_addr_peer = await asyncio.gather(
+        _session_execute(
             session_maker,
-            identity_key_pair,
-            registration_id,
-            signed_pre_key_id,
-            signed_pre_key_pair,
-            pre_key_id,
-            pre_key_pair,
-            timestamp
+            select(Peers.address).where(
+                Peers.type == PEERTYPE_MYSELF
+            ),
+            scalar=True,
+        ),
+        _session_execute(
+            session_maker,
+            select(Peers.address, Peers.type).where(
+                Peers.address == address
+            ),
+            scalar=True,
+        )
+    )
+
+    init_coros = []
+
+    if own_addr_peer is not None and own_addr_peer[1] != PEERTYPE_MYSELF:
+        logging.debug("Deleting existing peer with current address")
+
+        init_coros.append(
+            _session_execute(
+                session_maker,
+                delete(Peers)
+                .where(Peers.address == address),
+                commit=True,
+            )
         )
 
-    store = storage.InMemSignalProtocolStore(
-        identity_key_pair,
-        registration_id
-    )
+    if own_peer is not None:
+        logging.debug("Updating existing peer")
 
-    signed_prekey = state.SignedPreKeyRecord(
-        signed_pre_key_id,
-        timestamp,
-        signed_pre_key_pair,
-        identity_key_pair.private_key()
-        .calculate_signature(signed_pre_key_pair.public_key().serialize())
-    )
-    store.save_signed_pre_key(signed_pre_key_id, signed_prekey)
+        await asyncio.gather(*init_coros)
+        init_coros.clear()
 
-    pre_key_record = state.PreKeyRecord(pre_key_id, pre_key_pair)
-    store.save_pre_key(pre_key_id, pre_key_record)
+        init_coros.append(
+            _session_execute(
+                session_maker,
+                update(Peers)
+                .where(Peers.type == PEERTYPE_MYSELF)
+                .values(
+                    address=address,
+                    checked_time=datetime.now()
+                ),
+                commit=True,
+            )
+        )
+    else:
+        logging.debug("Generating new peer")
 
-    return store
+        (
+            identity_key_pair,
+            registration_id,
+            signed_pre_key_id,
+            signed_pre_key_pair,
+            pre_key_id,
+            pre_key_pair,
+            timestamp,
+            sid
+        ) = _generate_encryption_keys()
+        init_coros.append(
+            _store_encryption_keys(
+                session_maker,
+                address,
+                identity_key_pair,
+                registration_id,
+                signed_pre_key_id,
+                signed_pre_key_pair,
+                pre_key_id,
+                pre_key_pair,
+                timestamp,
+                sid
+            )
+        )
+
+    await asyncio.gather(*init_coros)

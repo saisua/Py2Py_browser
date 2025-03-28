@@ -89,11 +89,14 @@ class InformationRequest(Request):
 
     @staticmethod
     async def send(
+        session_maker,
         addr,
-        key,
+        sid,
         hashes: dict[str, int | list[int]],
         requested_peer_addrs: list[str],
     ):
+        print(f"Sending information request to {addr}", flush=True)
+
         request = {
             'code': InformationRequest.CODE,
             'hashes': hashes,
@@ -101,8 +104,9 @@ class InformationRequest(Request):
         }
 
         return await send_request(
+            session_maker,
             addr,
-            0,
+            sid,
             request,
             large_response=False,
         )

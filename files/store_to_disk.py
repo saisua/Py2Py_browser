@@ -3,6 +3,7 @@ import random
 from datetime import datetime
 import asyncio
 import hashlib
+import logging
 
 from sqlalchemy import select, update, func
 from sqlalchemy.exc import IntegrityError
@@ -18,6 +19,8 @@ from files.utils.store_str import _store_str
 
 
 async def store_to_disk(session_maker, url_hash, domain_hash, data):
+    logging.debug(f"Storing to disk: {url_hash} {domain_hash}")
+
     data_splits = []
     for i in range(0, len(data), split_size):
         data_splits.append(data[i:i + split_size])
@@ -33,6 +36,8 @@ async def store_to_disk(session_maker, url_hash, domain_hash, data):
 
     store_coros = []
     if asset is not None:
+        logging.debug(f"Updating asset: {url_hash}")
+
         store_coros.append(
             _session_execute(
                 session_maker,
@@ -45,6 +50,8 @@ async def store_to_disk(session_maker, url_hash, domain_hash, data):
             )
         )
     else:
+        logging.debug(f"Adding asset: {url_hash}")
+
         try:
             await _session_add_all(
                 session_maker,
@@ -56,11 +63,13 @@ async def store_to_disk(session_maker, url_hash, domain_hash, data):
                 ),)
             )
         except IntegrityError as e:
-            print(e)
+            logging.error(e)
             return
 
+    logging.debug(f"Storing {len(data_splits)} data splits to disk")
     for i, data_split in enumerate(data_splits):
         file_path = os.path.join(data_dir, f"{url_hash}{i}")
+
         store_coros.append(_store_bytes(file_path, data_split))
 
         new_asset_parts.append(StoredAssetParts(
@@ -70,6 +79,7 @@ async def store_to_disk(session_maker, url_hash, domain_hash, data):
         ))
 
     if len(data_splits) != 1:
+        logging.debug(f"Getting max hash num for {url_hash}")
         max_hash_num = await _session_execute(
             session_maker,
             select(
@@ -86,6 +96,7 @@ async def store_to_disk(session_maker, url_hash, domain_hash, data):
 
     hashes_folder = os.path.join(hashes_dir, url_hash)
     if not os.path.exists(hashes_folder):
+        logging.debug(f"Creating hashes folder: {hashes_folder}")
         os.makedirs(hashes_folder, exist_ok=True)
 
     # Get max id of stored_asset_hashes
@@ -96,6 +107,8 @@ async def store_to_disk(session_maker, url_hash, domain_hash, data):
     )
     store_coros.clear()
     new_asset_parts.clear()
+
+    logging.debug(f"Generating {n_hashes} hashes for {url_hash}")
 
     new_hashes = []
     hashed = set()
@@ -137,6 +150,8 @@ async def store_to_disk(session_maker, url_hash, domain_hash, data):
             )
             for ind in combination_indices
         ))
+
+    logging.debug(f"Storing {len(new_hashes)} hashes to disk")
 
     await asyncio.gather(
         *store_coros,

@@ -1,5 +1,6 @@
 import asyncio
 import os
+import logging
 
 from config import data_dir
 
@@ -11,6 +12,8 @@ store_data_tasks = list()
 
 
 async def store_res_to_disk(session_maker, response):
+    logging.debug("Storing response to disk")
+
     for task in store_data_tasks:
         if task.done() or task.cancelled():
             store_data_tasks.remove(task)
@@ -26,12 +29,13 @@ async def store_res_to_disk(session_maker, response):
         for file in os.listdir(data_dir)
         if file.startswith(url_hash)
     )):
+        logging.debug("Response already stored")
         return
 
     try:
         body = await response.body()
     except Exception as e:
-        print(e)
+        logging.error(e)
         return
 
     store_data_tasks.append(
@@ -40,4 +44,4 @@ async def store_res_to_disk(session_maker, response):
         )
     )
 
-    print("<<", url, flush=False)
+    logging.debug(f"<< {url}")

@@ -3,12 +3,12 @@ import asyncio
 
 from sqlalchemy import select
 
+from config import PEERTYPE_CLIENT
 from db.peers import Peers
 
 from db.utils.add_all import _session_add_all
 
 from encryption.decrypt_message import decrypt_message
-from encryption.encrypt_message import encrypt_message
 
 from p2p.requests.health_check import HealthCheck
 
@@ -17,12 +17,12 @@ from p2p.utils.send_request import send_request
 from p2p.requests.request import Request
 
 
-async def store_online_peers(session_maker, peer_addrs):
+async def store_online_peers(session_maker, peer_addrs, sids):
     health_check_coros = []
-    for address in peer_addrs:
+    for address, sid in zip(peer_addrs, sids):
         # TODO: Use key
         health_check_coros.append(
-            HealthCheck.send(address, key=0)
+            HealthCheck.send(session_maker, address, sid)
         )
 
     responses = await asyncio.gather(*health_check_coros)
@@ -33,9 +33,9 @@ async def store_online_peers(session_maker, peer_addrs):
     # TODO: Use key
     new_peers = [
         Peers(
-            address=encrypt_message(address, key=0),
+            address=address,
             checked_time=now,
-            type=0,
+            type=PEERTYPE_CLIENT,
         )
         for address, response in zip(peer_addrs, responses)
         if "status" in response and response['status'] == 0
@@ -65,8 +65,9 @@ class PeerRequest(Request):
 
         recv_peer_addrs = request.get('peers')
         if recv_peer_addrs:
-            decrypted_peer_addrs = [
-                decrypt_message(peer.address) for peer in peers
+            # TODO: Fix encryption
+            peer_addrs = [
+                peer.address for peer in peers
             ]
             decrypted_recv_peer_addrs = set(filter(
                 None,
@@ -89,7 +90,7 @@ class PeerRequest(Request):
             peer_addrs = [
                 peer.address
                 for peer_num, peer in enumerate(peers)
-                if decrypted_peer_addrs[peer_num]
+                if peer_addrs[peer_num]
                 not in decrypted_recv_peer_addrs
             ]
         else:
@@ -101,10 +102,12 @@ class PeerRequest(Request):
         return {'status': 0, 'peers': peer_addrs}
 
     @staticmethod
-    async def send(addr, key, peers=None):
+    async def send(session_maker, addr, sid, peers=None):
+        print(f"Sending peer request to {addr}", flush=True)
+
         request = {
             'code': PeerRequest.CODE,
         }
         if peers:
             request['peers'] = peers
-        return await send_request(addr, key, request)
+        return await send_request(session_maker, addr, sid, request)

@@ -2,9 +2,16 @@ import asyncio
 
 from sqlalchemy import select
 
+from config import (
+    SOCIAL_ID,
+    BROWSER_URL_CHANGE,
+)
+
 from browser.utils.hash_req_res import hash_req_res
 
-from files.load_req_from_disk import load_req_from_disk
+from communication.communication import CommunicationUser
+
+from files.browser.load_req_from_disk import load_req_from_disk
 
 from p2p.request_hashes import request_hashes
 from p2p.requests.information_request import InformationRequest
@@ -15,7 +22,21 @@ from db.utils.execute import _session_execute
 _store_response_in_disk_tasks = list()
 
 
-async def handle_route(session_maker, route, request):
+def _notify_social(comm_user: CommunicationUser, url: str):
+    comm_user.send_message(
+        SOCIAL_ID,
+        0,
+        BROWSER_URL_CHANGE,
+        url,
+    )
+
+
+async def handle_route(
+    session_maker,
+    comm_user: CommunicationUser,
+    route,
+    request
+):
     for task_ref in _store_response_in_disk_tasks:
         if task_ref.cancelled() or task_ref.done():
             _store_response_in_disk_tasks.remove(task_ref)
@@ -41,8 +62,9 @@ async def handle_route(session_maker, route, request):
         load_req_from_disk(url_hash),
         *(
             InformationRequest.send(
+                session_maker,
                 peer.address,
-                0,
+                peer.sid,
                 {url_hash: -1},
                 [peer.address for peer in peers],
             )
@@ -55,6 +77,7 @@ async def handle_route(session_maker, route, request):
             status=200,
             body=cached_response,
         )
+        _notify_social(comm_user, url)
         return
 
     if any((
@@ -74,7 +97,9 @@ async def handle_route(session_maker, route, request):
                 status=200,
                 body=data,
             )
+            _notify_social(comm_user, url)
             return
 
     print(" (>>)", flush=False)
     await route.continue_()
+    _notify_social(comm_user, url)

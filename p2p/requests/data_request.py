@@ -1,6 +1,7 @@
 import os
 import asyncio
 from datetime import timedelta
+import logging
 
 from config import data_dir, hashes_dir
 
@@ -20,6 +21,8 @@ class DataRequest(Request):
         self.session_maker = session_maker
 
     async def handle(self, request, *args, **kwargs):
+        logging.debug("Handling data request")
+
         hashes = request.get('hashes')
         requested_peer_addrs = request.get('requested_peer_addrs')
 
@@ -30,6 +33,7 @@ class DataRequest(Request):
         )
 
         if asset_refs is None:
+            logging.debug("No asset refs found")
             return {
                 'status': 0,
                 "data": {},
@@ -122,6 +126,12 @@ class DataRequest(Request):
 
             hash_hint.append(hint.part)
 
+        logging.debug(
+            f"Found {len(data)} assets, "
+            f"{len(hashes)} hashes, "
+            f"and {len(hints)} hints"
+        )
+
         return {
             'status': 0,
             "data": data,
@@ -132,12 +142,15 @@ class DataRequest(Request):
 
     @staticmethod
     async def send(
+        session_maker,
         addr,
-        key,
+        sid,
         hashes: dict[str, int | list[int]],
         requested_peer_addrs: list[str],
         max_timedelta: timedelta | None = None,
     ):
+        logging.debug(f"Sending data request to {addr}")
+
         request = {
             'code': DataRequest.CODE,
             'hashes': hashes,
@@ -146,4 +159,10 @@ class DataRequest(Request):
         if max_timedelta is not None:
             request['max_timedelta'] = max_timedelta
 
-        return await send_request(addr, 0, request, large_response=True)
+        return await send_request(
+            session_maker,
+            addr,
+            sid,
+            request,
+            large_response=True,
+        )

@@ -4,13 +4,32 @@ import os
 import traceback
 from functools import partial
 from threading import Thread
+import logging
 
-from config import suffix, data_path, num_threads
+from config import (
+    num_threads,
+    peer_addr_dir,
+    DEBUG_ADD_PEERS,
+    DEBUG_SHARE_BUNDLE,
+)
+
+from communication.communication_user import CommunicationUser
+
+from debugging.add_peers import add_peers_forever
 
 from p2p.requests.data_request import DataRequest
 from p2p.requests.health_check import HealthCheck
 from p2p.requests.information_request import InformationRequest
 from p2p.requests.peer_request import PeerRequest
+from p2p.requests.chat_request import ChatRequest
+from p2p.utils.addr_to_bytes import addr_to_bytes
+
+from encryption.initialize_encryption import initialize_encryption
+from encryption.generate_peer_bundle import _generate_peer_bundle
+from encryption.encrypt_message import encrypt_message
+from encryption.decrypt_message import decrypt_message
+
+from utils.remove_tasks_forever import remove_tasks_forever
 
 
 class AsyncBsonServer:
@@ -19,6 +38,7 @@ class AsyncBsonServer:
         InformationRequest,
         PeerRequest,
         DataRequest,
+        ChatRequest,
     ]
     REQUEST_HANDLERS: dict = dict()
 
@@ -28,10 +48,16 @@ class AsyncBsonServer:
     _instance_ports: list
     _instance_lock: asyncio.Lock
 
+    _ref_tasks: list
+    _ref_task_del: asyncio.Task
+
+    comm_user: CommunicationUser
+
     def __init__(
         self,
         session_maker,
-        host='127.0.0.1',
+        comm_user: CommunicationUser,
+        host='::1',
         port=None,
         *,
         num_threads=num_threads,
@@ -41,6 +67,11 @@ class AsyncBsonServer:
         self._instance_ports = list()
         self._instance_lock = asyncio.Lock()
 
+        self._ref_tasks = list()
+        self._ref_task_del = None
+
+        self.comm_user = comm_user
+
         self.host = host
         self.port = port
         self.num_threads = num_threads
@@ -49,6 +80,9 @@ class AsyncBsonServer:
             for handler in self._REQUEST_HANDLERS_CLASSES
         }
 
+    async def initialize_encryption(self, address):
+        await initialize_encryption(self.session_maker, address)
+
     async def write_error(self, writer):
         response = {"status": -1}
         writer.write(bson.dumps(response))
@@ -56,22 +90,32 @@ class AsyncBsonServer:
 
     async def handle_client(self, reader, writer, own_port_i):
         port = self._instance_ports[own_port_i]
-        data_len = self._instance_sizes[port]
+        payload = self._instance_sizes[port]
+        sid = payload[:4]
+        data_len = payload[4:]
         try:
-            # print(f"data_len: {data_len}", flush=False)
+            ip, port = writer.get_extra_info('peername')[:2]
+            addr_str = f"{ip}:{port}"
+
+            logging.debug(f"Received {data_len}B request from {addr_str}")
 
             data = b""
             while len(data) < data_len:
                 data += await reader.read(data_len - len(data))
 
             if not data:
-                print(f"no data / {data_len}")
+                logging.warning(f"no data / {data_len}")
                 return
 
-            request = bson.loads(data)
+            decrypted_data = await decrypt_message(
+                self.session_maker,
+                data,
+                sid
+            )
+            request = bson.loads(decrypted_data)
 
             if not request.get('code'):
-                print("no code")
+                logging.warning("no code")
                 await self.write_error(writer)
                 return
 
@@ -79,19 +123,26 @@ class AsyncBsonServer:
 
             handler = self.REQUEST_HANDLERS.get(request_code)
             if not handler:
-                print(f"invalid code {request_code}")
+                logging.warning(f"invalid code {request_code}")
                 await self.write_error(writer)
                 return
 
             response = await handler.handle(request)
             bin_response = bson.dumps(response)
-            # print(f"Responding {len(bin_response)} bytes")
-            writer.write(len(bin_response).to_bytes(4, 'big'))
+            encrypted_response = await encrypt_message(
+                self.session_maker,
+                bin_response,
+                sid
+            )
+
+            logging.debug(f"Responding {len(bin_response)} bytes")
+
+            writer.write(len(encrypted_response).to_bytes(4, 'big'))
             await writer.drain()
-            writer.write(bin_response)
+            writer.write(encrypted_response)
             await writer.drain()
         except Exception:
-            print(traceback.format_exc())
+            logging.error(traceback.format_exc())
             await self.write_error(writer)
         finally:
             writer.close()
@@ -101,7 +152,7 @@ class AsyncBsonServer:
             )
 
             # print(f"[{port}] closed", flush=False)
-            print(f"[{port}] request closed", flush=False)
+            logging.debug(f"[{port}] request closed")
 
     async def _set_data_size(
         self,
@@ -119,7 +170,7 @@ class AsyncBsonServer:
 
     async def redirect_request(self, reader, writer):
         try:
-            data_len = await reader.read(1024)
+            data_len = await reader.read(8)
             if not data_len:
                 return
 
@@ -164,8 +215,34 @@ class AsyncBsonServer:
 
             print(f" instance {i} started on port {port}")
 
-        with open(os.path.join(data_path, f"address{suffix}.txt"), "w") as f:
-            f.write(':'.join(map(str, addr)))
+        addr_str = ':'.join(map(str, addr[:2]))
+        addr = addr_to_bytes(*addr[:2])
+        await initialize_encryption(self.session_maker, addr)
+
+        if DEBUG_SHARE_BUNDLE:
+            # It should be encrypted but its for debugging
+            encryption_data = await _generate_peer_bundle(
+                self.session_maker,
+                addr,
+            )
+
+            os.makedirs(peer_addr_dir, exist_ok=True)
+            with open(
+                os.path.join(peer_addr_dir, addr_str),
+                "wb+",
+            ) as f:
+                f.write(encryption_data)
+
+        if DEBUG_ADD_PEERS:
+            self._ref_tasks.append(
+                asyncio.create_task(
+                    add_peers_forever(self.session_maker)
+                )
+            )
+
+        self._ref_task_del = asyncio.create_task(
+            remove_tasks_forever(self._ref_tasks)
+        )
 
         server_tasks = []
         try:

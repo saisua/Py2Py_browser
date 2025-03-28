@@ -1,66 +1,54 @@
 import asyncio
 import os
-import shutil
 
 from config import (
-    data_path,
     data_dir,
     hashes_dir,
-    db_dir,
-    DEBUG_PURGE_DATA,
     UPLOAD_FILES,
-    DEBUG_ADD_PEER,
+    DEBUG_PURGE_DATA,
+    BROWSER_ID,
+    SERVER_ID,
+    SOCIAL_ID,
 )
 
 if DEBUG_PURGE_DATA:
-    shutil.rmtree(data_dir, ignore_errors=True)
-    print("Erased data dir", flush=False)
-    shutil.rmtree(hashes_dir, ignore_errors=True)
-    print("Erased hashes dir", flush=False)
-    if os.path.exists(db_dir):
-        os.remove(db_dir)
-    print("Erased db", flush=False)
+    from debugging.purge_data import purge_data
+    purge_data()
 
 from db import session_maker, engine
+
+from communication.communication import Communication
+from communication.concurrency_layers import MainThreadLayer
+from communication.concurrency_layers import ThreadLayer
 
 from p2p.server import AsyncBsonServer
 
 from browser.run_browser import run_browser
 
+from social.run_social import SocialApp
 from utils.upload_files import upload_files
 
-if DEBUG_ADD_PEER:
-    from datetime import datetime
+# if DEBUG_ADD_PEERS:
+#     from debugging.add_peers import add_peers
+#     from debugging.add_groups import add_groups
 
-    from db.peers import Peers
-    from db.utils.add import _session_add
-
-    if os.path.exists(f"{data_path}/address_2.txt"):
-        with open(f"{data_path}/address_2.txt", "r") as f:
-            addr = f.read()
-
-        try:
-            asyncio.run(
-                _session_add(
-                    session_maker,
-                    Peers(
-                        address=addr,
-                        type=0,
-                        checked_time=datetime.now(),
-                    ),
-                )
-            )
-            print(f"Added peer {addr}", flush=False)
-        except Exception as e:
-            print(e)
+#     add_peers(session_maker)
+#     if DEBUG_ADD_GROUPS:
+#         add_groups(session_maker)
 
 
 async def main():
     os.makedirs(data_dir, exist_ok=True)
     os.makedirs(hashes_dir, exist_ok=True)
 
-    server = AsyncBsonServer(session_maker)
+    comm = Communication()
+
+    server_user = comm.add_user(SERVER_ID, ThreadLayer(1))
+    server = AsyncBsonServer(session_maker, server_user)
     server.start()
+
+    social_user = comm.add_user(SOCIAL_ID, MainThreadLayer())
+    app = SocialApp(session_maker, social_user)
 
     if UPLOAD_FILES:
         print("Uploading files", flush=False)
@@ -70,15 +58,26 @@ async def main():
     else:
         upload_files_task = None
 
+    browser_user = comm.add_user(BROWSER_ID, MainThreadLayer())
     try:
-        await run_browser(session_maker)
+        await asyncio.gather(
+            run_browser(session_maker, browser_user),
+            app.async_run(),
+        )
     except KeyboardInterrupt:
         pass
     except asyncio.CancelledError:
         pass
     finally:
         await engine.dispose()
-        server.stop()
+        try:
+            server.stop()
+        except Exception:
+            pass
+        try:
+            app.stop()
+        except Exception:
+            pass
 
     if upload_files_task is not None:
         await upload_files_task

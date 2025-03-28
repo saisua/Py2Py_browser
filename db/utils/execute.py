@@ -20,13 +20,19 @@ async def _session_execute(
                     result = result.fetchall()
                 else:
                     result = result.fetchone()
+            if result is None:
+                return
             if scalar:
                 if many:
                     result = result.scalars()
                 else:
                     result = result.scalar()
+            if result is None:
+                return
             if (fetch or scalar) and many:
                 result = result.all()
+            if result is None:
+                return
             if commit:
                 await session.commit()
             if expunge:

@@ -4,3 +4,6 @@ sqlalchemy[asyncio]
 bson
 signal-protocol
 numpy
+kivy[full]
+cryptography
+sortedcontainers

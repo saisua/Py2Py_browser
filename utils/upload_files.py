@@ -1,5 +1,6 @@
 import os
 import asyncio
+import logging
 
 from config import files_to_upload_dir
 
@@ -38,7 +39,7 @@ async def upload_files(session_maker):
                 "local",
                 "GET",
             )
-            print("uploading", f"{url}/", url_hash, flush=False)
+            logging.info("uploading", f"{url}/", url_hash)
 
             files_to_dump_coros.append(
                 read_file_store_to_disk(
@@ -64,11 +65,10 @@ async def upload_files(session_maker):
                             "GET",
                         )
 
-                        print(
+                        logging.info(
                             "uploading",
                             f"{url}/{formatted_folder}/{formatted_file}/",
                             url_hash,
-                            flush=False,
                         )
 
                         files_to_dump_coros.append(

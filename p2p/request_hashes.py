@@ -1,6 +1,7 @@
 import random
 import asyncio
 import os
+import logging
 
 import numpy as np
 
@@ -83,6 +84,8 @@ def choose_peer_requests(
                 peer_weights = np.exp(peer_weights - peer_weights.max())
                 peer_weights /= peer_weights.sum()
 
+    logging.debug(f"Peer requests: {peer_reqs}")
+
     return peer_reqs, url_hashes_num_parts
 
 
@@ -95,17 +98,31 @@ async def request_hashes(
     peers: list[str],
     peers_info: list[dict],
 ):
+    logging.debug("Requesting hashes")
+
     for task in _store_response_in_disk_tasks:
         if task.done() or task.cancelled():
             _store_response_in_disk_tasks.remove(task)
 
     peer_reqs, url_hashes_num_parts = choose_peer_requests(peers, peers_info)
 
-    all_peer_addrs = [peer.address for peer in peers]
+    all_peer_addrs = [
+        (
+            peer.address,
+            peer.sid,
+        ) for peer in peers
+    ]
 
     recv_responses = await asyncio.gather(*(
-        DataRequest.send(peer_addr, 0, request_hashes, all_peer_addrs)
-        for peer_addr, request_hashes in peer_reqs.items()
+        DataRequest.send(
+            session_maker,
+            peer_addr,
+            sid,
+            request_hashes,
+            all_peer_addrs,
+        )
+        for peer_addr, sid in all_peer_addrs
+        for request_hashes in peer_reqs.get(peer_addr, dict())
     ))
     url_data = dict()
     for url_hash in url_hashes:
@@ -121,7 +138,7 @@ async def request_hashes(
             ):
                 continue
 
-            print(" (~~)", flush=False)
+            logging.debug(" (~~)")
 
             for part_hash, part_data in recv_response['data'].items():
                 _store_response_in_disk_tasks.append(
@@ -152,5 +169,7 @@ async def request_hashes(
                 key=lambda item: int(item[0][len_url_hash:]),
             )
         ))
+
+    logging.debug(f"Requesting hashes done. Got {len(url_data)} bytes")
 
     return url_data

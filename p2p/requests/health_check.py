@@ -13,9 +13,12 @@ class HealthCheck(Request):
         return {'status': 0}
 
     @staticmethod
-    async def send(addr, key):
+    async def send(session_maker, addr, sid):
+        print(f"Sending health check request to {addr}", flush=True)
+
         return await send_request(
+            session_maker,
             addr,
-            key,
+            sid,
             {'code': HealthCheck.CODE},
         )

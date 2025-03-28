@@ -11,8 +11,9 @@ class Request:
     @staticmethod
     @abstractmethod
     def send(
+        session_maker,
         addr,
-        key,
+        sid,
         *args,
         **kwargs,
     ):
