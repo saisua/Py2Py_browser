@@ -1,4 +1,10 @@
 import asyncio
+import logging
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+)
 
 from config import (
     UPLOAD_FILES,
@@ -12,12 +18,11 @@ from p2p.server import AsyncBsonServer
 
 from db import session_maker
 
-from utils.upload_files import upload_files
+from file_upload.upload_files import upload_files
 
 
 async def main():
     if UPLOAD_FILES:
-        print("Uploading files", flush=False)
         upload_files_task = asyncio.create_task(
             upload_files(session_maker)
         )

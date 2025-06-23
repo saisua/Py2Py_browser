@@ -26,7 +26,7 @@ from p2p.server import AsyncBsonServer
 from browser.run_browser import run_browser
 
 from social.run_social import SocialApp
-from utils.upload_files import upload_files
+from file_upload.upload_files import upload_files
 
 # if DEBUG_ADD_PEERS:
 #     from debugging.add_peers import add_peers
@@ -69,13 +69,16 @@ async def main():
     except asyncio.CancelledError:
         pass
     finally:
-        await engine.dispose()
+        try:
+            app.stop()
+        except Exception:
+            pass
         try:
             server.stop()
         except Exception:
             pass
         try:
-            app.stop()
+            await engine.dispose()
         except Exception:
             pass
 

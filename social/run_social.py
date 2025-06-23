@@ -12,6 +12,7 @@ from communication.communication import CommunicationUser
 from social.widgets.keyboard_listener import KeyboardListener
 from social.widgets.menu import ExpandableMenu
 from social.widgets.chat import Chat
+from social.utils.check_communication import check_communication
 
 from utils.remove_tasks_forever import remove_tasks_forever
 
@@ -19,9 +20,13 @@ from utils.remove_tasks_forever import remove_tasks_forever
 class SocialApp(App):
     _task_refs: list
     _del_task_ref: asyncio.Task
+    _comm_task_ref: asyncio.Task
     _closed: bool = False
 
     _comm_user: CommunicationUser
+
+    chat: Chat
+    menu: ExpandableMenu
 
     def __init__(
         self,
@@ -74,6 +79,9 @@ class SocialApp(App):
     async def async_run(self, *args, **kwargs):
         self._del_task_ref = asyncio.create_task(
             remove_tasks_forever(self._task_refs)
+        )
+        self._comm_task_ref = asyncio.create_task(
+            check_communication(self._comm_user, self)
         )
 
         await super().async_run(*args, **kwargs)

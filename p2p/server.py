@@ -2,6 +2,7 @@ import asyncio
 import bson
 import os
 import traceback
+from datetime import datetime
 from functools import partial
 from threading import Thread
 import logging
@@ -11,6 +12,7 @@ from config import (
     peer_addr_dir,
     DEBUG_ADD_PEERS,
     DEBUG_SHARE_BUNDLE,
+    suffix,
 )
 
 from communication.communication_user import CommunicationUser
@@ -89,10 +91,10 @@ class AsyncBsonServer:
         await writer.drain()
 
     async def handle_client(self, reader, writer, own_port_i):
+        # Possible DOS when attacking all ports before
+        # correct initialization
         port = self._instance_ports[own_port_i]
-        payload = self._instance_sizes[port]
-        sid = payload[:4]
-        data_len = payload[4:]
+        (_, sid, data_len) = self._instance_sizes[port]
         try:
             ip, port = writer.get_extra_info('peername')[:2]
             addr_str = f"{ip}:{port}"
@@ -102,6 +104,8 @@ class AsyncBsonServer:
             data = b""
             while len(data) < data_len:
                 data += await reader.read(data_len - len(data))
+
+            logging.debug(f"Received {len(data)}B from {addr_str}")
 
             if not data:
                 logging.warning(f"no data / {data_len}")
@@ -151,7 +155,7 @@ class AsyncBsonServer:
                 self._set_data_size(port, 0, check_unoccupied=False),
             )
 
-            # print(f"[{port}] closed", flush=False)
+            # logging.debug(f"[{port}] closed")
             logging.debug(f"[{port}] request closed")
 
     async def _set_data_size(
@@ -170,28 +174,44 @@ class AsyncBsonServer:
 
     async def redirect_request(self, reader, writer):
         try:
-            data_len = await reader.read(8)
-            if not data_len:
+            first_payload: bytes = await reader.read(8)
+            if not first_payload:
+                logging.warning("No payload received")
                 return
 
-            data_len = int.from_bytes(data_len, 'big')
-            if data_len == 0:
+            if first_payload == b'\x00' * 8:
+                logging.warning("Empty payload received")
                 return
+
+            data_len = int.from_bytes(first_payload[4:], 'big')
             if data_len > 2**31:
-                print("data_len is too large")
+                logging.warning(f"data_len is too large {data_len}")
+                writer.write(b'\x00' * 4)
+                await writer.drain()
                 return
+
+            sid = int.from_bytes(first_payload[:4], 'big')
 
             for _ in range(100):
                 for port, size in self._instance_sizes.items():
-                    if size == 0:
-                        if await self._set_data_size(port, data_len):
-                            writer.write(port.to_bytes(4, 'big'))
-                            await writer.drain()
-                            return
-                    # print(f"port {port} is handling {size}", flush=False)
+                    if (
+                        size == 0
+                        and  # noqa: W503 W504
+                        await self._set_data_size(
+                            port,
+                            (datetime.now(), sid, data_len),
+                        )
+                    ):
+                        writer.write(port.to_bytes(4, 'big'))
+                        await writer.drain()
+                        return
+                    logging.debug(f"port {port} is handling {size}")
                 await asyncio.sleep(0.15)
-                # print("waiting for data size", flush=False)
-        except Exception:
+                logging.debug("waiting for data size")
+            else:
+                logging.critical("No port found")
+        except Exception as e:
+            logging.error(e)
             return None
 
     async def start_server(self):
@@ -199,7 +219,7 @@ class AsyncBsonServer:
             self.redirect_request, self.host, self.port
         )
         addr = server.sockets[0].getsockname()
-        print(f'Serving on {addr}')
+        logging.info(f'Serving on {addr}')
 
         servers = [server]
         for i in range(self.num_threads):
@@ -213,7 +233,7 @@ class AsyncBsonServer:
             self._instance_sizes[port] = 0
             self._instance_ports.append(port)
 
-            print(f" instance {i} started on port {port}")
+            logging.info(f" instance {i} started on port {port}")
 
         addr_str = ':'.join(map(str, addr[:2]))
         addr = addr_to_bytes(*addr[:2])
@@ -227,8 +247,13 @@ class AsyncBsonServer:
             )
 
             os.makedirs(peer_addr_dir, exist_ok=True)
+
+            for file in os.listdir(peer_addr_dir):
+                if file.endswith(f"-{suffix}"):
+                    os.remove(os.path.join(peer_addr_dir, file))
+
             with open(
-                os.path.join(peer_addr_dir, addr_str),
+                os.path.join(peer_addr_dir, f"{addr_str}-{suffix}"),
                 "wb+",
             ) as f:
                 f.write(encryption_data)
@@ -256,7 +281,7 @@ class AsyncBsonServer:
                 await asyncio.sleep(1)
 
         except Exception:
-            print(traceback.format_exc())
+            logging.error(traceback.format_exc())
         finally:
             exit_coros = list()
             for server, server_task in zip(servers, server_tasks):

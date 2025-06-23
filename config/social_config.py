@@ -5,6 +5,8 @@ from config.global_config import suffix
 USER_COLOR_START = 128
 USER_COLOR_RANGE = 32
 
+MAX_CHAT_BUTTON_LENGTH = 10
+
 max_chat_msgs = 25
 
 username = f"User{suffix}"
@@ -22,4 +24,7 @@ class SocialCommTopics(IntEnum):
     BROWSER_URL_CHANGE = auto()
 
 
-globals().update(SocialCommTopics.__members__)
+globals().update({
+    topic_k: topic_v.value
+    for topic_k, topic_v in SocialCommTopics.__members__.items()
+})

@@ -18,7 +18,8 @@ async def load_req_from_disk(url_hash):
         logging.debug("Request validation failed")
         return None
 
-    files = sorted((
+    files = sorted(
+        (
             file
             for file in os.listdir(data_dir)
             if file.startswith(url_hash)

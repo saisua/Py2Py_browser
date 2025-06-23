@@ -12,7 +12,10 @@ from kivy.uix.gridlayout import GridLayout
 from kivy.properties import NumericProperty, BooleanProperty
 from kivy.animation import Animation
 
-from config import chats
+from config import (
+    chats,
+    MAX_CHAT_BUTTON_LENGTH,
+)
 
 
 class MenuItem(Button):
@@ -47,6 +50,8 @@ class ExpandableMenu(BoxLayout):
     expanded_width = NumericProperty(200)
     collapsed_width = NumericProperty(80)
 
+    menu_items: dict
+
     def __init__(
         self,
         app: "SocialApp",  # type: ignore # noqa: F821
@@ -59,6 +64,8 @@ class ExpandableMenu(BoxLayout):
         self.orientation = 'horizontal'
         self.size_hint_x = None
         self.width = self.collapsed_width
+
+        self.menu_items = dict()
 
     def build(self):
         # Menu toggle button
@@ -93,12 +100,18 @@ class ExpandableMenu(BoxLayout):
         for chat in chats:
             self.add_item(
                 chat,
-                lambda *_, chat=chat: self.app._task_refs.append(
-                    asyncio.create_task(self.app.chat.change_chat(chat))
-                ),
+                self._change_chat_callback(chat)
             )
 
         return self
+
+    def _change_chat_callback(self, chat):
+        def __change_chat_callback(*args):
+            self.app._task_refs.append(
+                asyncio.create_task(self.app.chat.change_chat(chat))
+            )
+
+        return __change_chat_callback
 
     def add_item(
             self,
@@ -107,11 +120,17 @@ class ExpandableMenu(BoxLayout):
             image_source: str = None,
     ):
         logging.debug(f"Adding menu item: {text}")
+
+        if len(text) > MAX_CHAT_BUTTON_LENGTH:
+            text = text[:MAX_CHAT_BUTTON_LENGTH]
+
         item = MenuItem(text=text, image_source=image_source).build()
         if callback:
             item.bind(on_press=callback)
         self.menu_grid.add_widget(item)
         self.menu_grid.height = len(self.menu_grid.children) * 90
+
+        self.menu_items['text'] = item
 
     def on_toggle(self, instance, state):
         logging.debug(f"Toggling menu: {state}")

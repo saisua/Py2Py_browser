@@ -35,12 +35,27 @@ class CommunicationUser:
         content: Any,
         layer: concurrency_layer_t
     ):
-        logging.debug(f'Received message p={priority} id={self.id} {content}')
         if self.layer.must_lock(layer):
             with self.lock:
-                self.messages.add(Message(priority, topic, content, layer))
+                self.messages.add(
+                    Message(
+                        self.id,
+                        priority,
+                        topic,
+                        content,
+                        layer
+                    )
+                )
         else:
-            self.messages.add(Message(priority, topic, content, layer))
+            self.messages.add(
+                Message(
+                    self.id,
+                    priority,
+                    topic,
+                    content,
+                    layer
+                )
+            )
 
     def send_message(
         self,
@@ -49,6 +64,9 @@ class CommunicationUser:
         topic: int,
         content: Any,
     ):
+        logging.debug(
+            f'Sending message p={priority} from {self.id} {topic}: {content}'
+        )
         self.comm.send_message(
             user_id,
             priority,
@@ -56,3 +74,13 @@ class CommunicationUser:
             content,
             self.layer,
         )
+
+    def get_messages(self, max_n: int = 100) -> list[Message]:
+        with self.lock:
+            if len(self.messages) > max_n:
+                messages = self.messages[-max_n:]
+                self.messages = self.messages[:-max_n]
+                return messages
+            messages = self.messages.copy()
+            self.messages.clear()
+            return messages

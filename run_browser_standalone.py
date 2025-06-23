@@ -7,6 +7,7 @@ from config import (
     UPLOAD_FILES,
     DEBUG_PURGE_DATA,
     BROWSER_ID,
+    SERVER_ID,
 )
 
 if DEBUG_PURGE_DATA:
@@ -16,10 +17,19 @@ if DEBUG_PURGE_DATA:
 from db import session_maker, engine
 
 from communication.communication import Communication
-from communication.concurrency_layers import MainThreadLayer
+from communication.concurrency_layers import (
+    MainThreadLayer,
+    ThreadLayer,
+)
+
+from p2p.server import AsyncBsonServer
 
 from browser.run_browser import run_browser
-from utils.upload_files import upload_files
+
+from file_upload.upload_files import upload_files
+
+
+DEBUG_RUN_SERVER = True
 
 
 async def main():
@@ -36,6 +46,11 @@ async def main():
     else:
         upload_files_task = None
 
+    if DEBUG_RUN_SERVER:
+        server_user = comm.add_user(SERVER_ID, ThreadLayer(1))
+        server = AsyncBsonServer(session_maker, server_user)
+        server.start()
+
     browser_user = comm.add_user(BROWSER_ID, MainThreadLayer())
     try:
         await run_browser(session_maker, browser_user)
@@ -45,6 +60,9 @@ async def main():
         pass
     finally:
         await engine.dispose()
+
+        if DEBUG_RUN_SERVER:
+            server.stop()
 
     if upload_files_task is not None:
         await upload_files_task

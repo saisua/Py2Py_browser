@@ -1,10 +1,12 @@
 import asyncio
+import logging
 
 from sqlalchemy import select
 
 from config import (
-    SOCIAL_ID,
-    BROWSER_URL_CHANGE,
+    DEBUG_DISABLE_DISK_REQUESTS,
+    DEBUG_DISABLE_PEER_REQUESTS,
+    DEBUG_RESOLVE_REQUESTS_SEQUENTIALLY,
 )
 
 from browser.utils.hash_req_res import hash_req_res
@@ -19,23 +21,15 @@ from p2p.requests.information_request import InformationRequest
 from db.peers import Peers
 from db.utils.execute import _session_execute
 
+
 _store_response_in_disk_tasks = list()
-
-
-def _notify_social(comm_user: CommunicationUser, url: str):
-    comm_user.send_message(
-        SOCIAL_ID,
-        0,
-        BROWSER_URL_CHANGE,
-        url,
-    )
 
 
 async def handle_route(
     session_maker,
     comm_user: CommunicationUser,
     route,
-    request
+    request,
 ):
     for task_ref in _store_response_in_disk_tasks:
         if task_ref.cancelled() or task_ref.done():
@@ -47,20 +41,26 @@ async def handle_route(
     headers = request.headers
     url_hash, _ = hash_req_res(url, domain, method, headers)
 
-    print(">>", request.url, url_hash, flush=False)
+    logging.info(f">> {request.url} {url_hash}")
 
-    peers = await _session_execute(
-        session_maker,
-        select(Peers),
-        scalar=True,
-        many=True,
-        expunge=True,
-    )
+    if not DEBUG_DISABLE_PEER_REQUESTS:
+        peers = await _session_execute(
+            session_maker,
+            select(Peers),
+            scalar=True,
+            many=True,
+            expunge=True,
+        )
+    else:
+        peers = list()
 
-    # TODO: ask for hints before requesting from peers
-    cached_response, *peers_info = await asyncio.gather(
-        load_req_from_disk(url_hash),
-        *(
+    data_requests = list()
+
+    if not DEBUG_DISABLE_DISK_REQUESTS:
+        data_requests.append(load_req_from_disk(url_hash))
+
+    if not DEBUG_DISABLE_PEER_REQUESTS:
+        data_requests.extend((
             InformationRequest.send(
                 session_maker,
                 peer.address,
@@ -69,21 +69,47 @@ async def handle_route(
                 [peer.address for peer in peers],
             )
             for peer in peers
+        ))
+
+    # TODO: ask for hints before requesting from peers
+    if DEBUG_RESOLVE_REQUESTS_SEQUENTIALLY:
+        data_responses = list()
+        for i, data_request in enumerate(data_requests, start=1):
+            data_response = await data_request
+            data_responses.append(data_response)
+
+            print(f"Data request {i}/{len(data_requests)} done")
+    else:
+        data_responses = await asyncio.gather(
+            *data_requests
         )
-    )
+
+    if not DEBUG_DISABLE_DISK_REQUESTS:
+        cached_response = data_responses[0]
+    else:
+        cached_response = None
+
+    if not DEBUG_DISABLE_PEER_REQUESTS:
+        peers_info = data_responses[1:]
+    else:
+        peers_info = list()
+
     if cached_response:
-        print(" (^^)", flush=False)
-        await route.fulfill(
-            status=200,
-            body=cached_response,
-        )
-        _notify_social(comm_user, url)
-        return
+        logging.info(" (^^)")
+
+        try:
+            await route.fulfill(
+                status=200,
+                body=cached_response,
+            )
+            return
+        except Exception as e:
+            logging.error(e)
 
     if any((
-        pi['data_refs']
-        for pi in peers_info
-        if pi is not None
+        peer_info['data_refs']
+        for peer_info in peers_info
+        if peer_info is not None
     )):
         data = await request_hashes(
             session_maker,
@@ -93,13 +119,14 @@ async def handle_route(
         )
         data = data.get(url_hash)
         if data:
-            await route.fulfill(
-                status=200,
-                body=data,
-            )
-            _notify_social(comm_user, url)
-            return
+            try:
+                await route.fulfill(
+                    status=200,
+                    body=data,
+                )
+                return
+            except Exception as e:
+                logging.error(e)
 
-    print(" (>>)", flush=False)
+    logging.info(" (>>)")
     await route.continue_()
-    _notify_social(comm_user, url)

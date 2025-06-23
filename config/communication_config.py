@@ -7,4 +7,7 @@ class CommunicationUserIds(IntEnum):
     SOCIAL_ID = auto()
 
 
-globals().update(CommunicationUserIds.__members__)
+globals().update({
+    id_k: id_v.value
+    for id_k, id_v in CommunicationUserIds.__members__.items()
+})

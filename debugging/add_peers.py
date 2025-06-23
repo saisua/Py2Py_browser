@@ -12,6 +12,7 @@ from config import (
     DEBUG_REMOVE_PREV_PEERS,
     PEERTYPE_MYSELF,
     PEERTYPE_CLIENT,
+    suffix,
 )
 
 from db.peers import Peers
@@ -52,11 +53,20 @@ async def add_peers(session_maker):
     ]
 
     new_peers = list()
-    for addr in os.listdir(peer_addr_dir):
+    for peer_bundle_file in os.listdir(peer_addr_dir):
+        addr, peer_suffix = peer_bundle_file.split('-', 1)
+        if peer_suffix == suffix:
+            continue
         if addr in known_addrs:
             continue
 
-        with open(os.path.join(peer_addr_dir, addr), "rb") as f:
+        with open(
+            os.path.join(
+                peer_addr_dir,
+                peer_bundle_file,
+            ),
+            "rb",
+        ) as f:
             bundle_bson = f.read()
 
         bundle_data = bson.loads(bundle_bson)

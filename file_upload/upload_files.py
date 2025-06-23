@@ -1,8 +1,15 @@
+from itertools import chain
 import os
 import asyncio
 import logging
 
-from config import files_to_upload_dir
+from config import (
+	files_to_upload_dir,
+	supported_video_extensions,
+	supported_audio_extensions,
+)
+
+from file_upload.upload_media import upload_media
 
 from browser.utils.hash_req_res import hash_req_res
 
@@ -28,28 +35,49 @@ def format_file_to_dump(file_to_dump):
     return file_to_dump.replace(" ", "-").lower()
 
 
-async def upload_files(session_maker):
+async def upload_files(session_maker, files=None):
+    if files is None:
+        files = os.listdir(files_to_upload_dir)
+        logging.info(
+            f"uploading {len(files)} files from {files_to_upload_dir}"
+        )
+    else:
+        logging.info(f"uploading {len(files)} files")
+
     files_to_dump_coros = list()
-    for file_to_dump in os.listdir(files_to_upload_dir):
+    for file_to_dump in files:
         formatted_file_to_dump = format_file_to_dump(file_to_dump)
         url = f"http://{formatted_file_to_dump}.p2p"
+        print(url)
         if not os.path.isdir(os.path.join(files_to_upload_dir, file_to_dump)):
-            url_hash, domain_hash = hash_req_res(
-                f"{url}/",
-                "local",
-                "GET",
-            )
-            logging.info("uploading", f"{url}/", url_hash)
-
-            files_to_dump_coros.append(
-                read_file_store_to_disk(
+            if any(
+                True
+                for ext in chain(
+                    supported_video_extensions,
+                    supported_audio_extensions,
+                )
+                if file_to_dump.endswith(ext)
+            ):
+                await upload_media(
                     session_maker,
                     os.path.join(files_to_upload_dir, file_to_dump),
-                    url_hash,
-                    domain_hash,
                 )
-            )
+            else:
+                url_hash, domain_hash = hash_req_res(
+                    f"{url}/",
+                    "local",
+                    "GET",
+                )
+                logging.info(f"uploading {url}/ {url_hash}")
 
+                files_to_dump_coros.append(
+                    read_file_store_to_disk(
+                        session_maker,
+                        os.path.join(files_to_upload_dir, file_to_dump),
+                        url_hash,
+                        domain_hash,
+                    )
+                )
         else:
             for folder, _, files in os.walk(
                 os.path.join(files_to_upload_dir, file_to_dump)
@@ -66,9 +94,9 @@ async def upload_files(session_maker):
                         )
 
                         logging.info(
-                            "uploading",
-                            f"{url}/{formatted_folder}/{formatted_file}/",
-                            url_hash,
+                            "uploading folder "
+                            f"{url}/{formatted_folder}/{formatted_file}/"
+                            f" {url_hash}"
                         )
 
                         files_to_dump_coros.append(
