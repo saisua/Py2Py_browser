@@ -1,4 +1,5 @@
 import os
+import logging
 
 from config import hashes_dir
 
@@ -17,15 +18,17 @@ class InformationRequest(Request):
 
     async def handle(self, request, *args, **kwargs):
         hashes = request.get('hashes')
-        requested_peer_addrs = request.get('requested_peer_addrs')
+        # requested_peer_addrs = request.get('requested_peer_addrs')
 
         asset_refs = await get_asset_refs(
             self.session_maker,
             hashes,
-            requested_peer_addrs,
+            [],
+            # requested_peer_addrs,
         )
 
         if asset_refs is None:
+            logging.debug("No asset refs found")
             return {
                 'status': 0,
                 "data_refs": {},

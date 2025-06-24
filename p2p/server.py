@@ -2,10 +2,10 @@ import asyncio
 import bson
 import os
 import traceback
-from datetime import datetime
 from functools import partial
 from threading import Thread
 import logging
+from random import choice
 
 from config import (
     num_threads,
@@ -94,18 +94,18 @@ class AsyncBsonServer:
         # Possible DOS when attacking all ports before
         # correct initialization
         port = self._instance_ports[own_port_i]
-        (_, sid, data_len) = self._instance_sizes[port]
+        (sid, data_len) = self._instance_sizes[port]
         try:
             ip, port = writer.get_extra_info('peername')[:2]
             addr_str = f"{ip}:{port}"
 
-            logging.debug(f"Received {data_len}B request from {addr_str}")
+            logging.debug(f"[{port}] Received {data_len}B request from {addr_str}")
 
             data = b""
             while len(data) < data_len:
                 data += await reader.read(data_len - len(data))
 
-            logging.debug(f"Received {len(data)}B from {addr_str}")
+            logging.debug(f"[{port}] received {len(data)}B")
 
             if not data:
                 logging.warning(f"no data / {data_len}")
@@ -123,6 +123,8 @@ class AsyncBsonServer:
                 await self.write_error(writer)
                 return
 
+            print(f"Request: {request}")
+
             request_code = request.get('code')
 
             handler = self.REQUEST_HANDLERS.get(request_code)
@@ -132,6 +134,7 @@ class AsyncBsonServer:
                 return
 
             response = await handler.handle(request)
+            print(f"Response: {response}")
             bin_response = bson.dumps(response)
             encrypted_response = await encrypt_message(
                 self.session_maker,
@@ -149,14 +152,20 @@ class AsyncBsonServer:
             logging.error(traceback.format_exc())
             await self.write_error(writer)
         finally:
+            self._force_set_data_size_sync(port, 0)
+            logging.debug(f"[{port}] request closed")
+
             writer.close()
-            _, resetted_port = await asyncio.gather(
-                writer.wait_closed(),
-                self._set_data_size(port, 0, check_unoccupied=False),
-            )
+            await writer.wait_closed()
+            # _, resetted_port = await asyncio.gather(
+            #     writer.wait_closed(),
+            #     # self._set_data_size(port, 0, check_unoccupied=False),
+            # )
 
             # logging.debug(f"[{port}] closed")
-            logging.debug(f"[{port}] request closed")
+
+    def _force_set_data_size_sync(self, port, size):
+        self._instance_sizes[port] = size
 
     async def _set_data_size(
         self,
@@ -192,24 +201,33 @@ class AsyncBsonServer:
 
             sid = int.from_bytes(first_payload[:4], 'big')
 
-            for _ in range(100):
+            for _ in range(50):
                 for port, size in self._instance_sizes.items():
-                    if (
-                        size == 0
-                        and  # noqa: W503 W504
-                        await self._set_data_size(
+                    if size == 0:
+                        if await self._set_data_size(
                             port,
-                            (datetime.now(), sid, data_len),
-                        )
-                    ):
-                        writer.write(port.to_bytes(4, 'big'))
-                        await writer.drain()
-                        return
+                            (sid, data_len),
+                        ):
+                            logging.debug(f"Assigned port {port} to {sid}")
+                            writer.write(port.to_bytes(4, 'big'))
+                            await writer.drain()
+                            return
                     logging.debug(f"port {port} is handling {size}")
                 await asyncio.sleep(0.15)
                 logging.debug("waiting for data size")
             else:
-                logging.critical("No port found")
+                port = choice(list(self._instance_ports))
+
+                logging.critical(f"No port found, forcing use of {port}")
+
+                if await self._set_data_size(
+                    port,
+                    (sid, data_len),
+                    check_unoccupied=False,
+                ):
+                    writer.write(port.to_bytes(4, 'big'))
+                    await writer.drain()
+                    return
         except Exception as e:
             logging.error(e)
             return None

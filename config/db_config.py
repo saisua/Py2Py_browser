@@ -5,3 +5,5 @@ from config.files_config import data_path
 
 db_protocol = "sqlite+aiosqlite"
 db_dir = os.path.join(data_path, f"data{suffix}.db")
+db_timeout = 30
+db_journal_mode = "WAL"

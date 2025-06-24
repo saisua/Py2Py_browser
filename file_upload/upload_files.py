@@ -10,6 +10,7 @@ from config import (
 )
 
 from file_upload.upload_media import upload_media
+from file_upload.utils.format_file import format_file_to_dump
 
 from browser.utils.hash_req_res import hash_req_res
 
@@ -31,10 +32,6 @@ async def read_file_store_to_disk(
     )
 
 
-def format_file_to_dump(file_to_dump):
-    return file_to_dump.replace(" ", "-").lower()
-
-
 async def upload_files(session_maker, files=None):
     if files is None:
         files = os.listdir(files_to_upload_dir)
@@ -46,9 +43,13 @@ async def upload_files(session_maker, files=None):
 
     files_to_dump_coros = list()
     for file_to_dump in files:
+        if file_to_dump.startswith("."):
+            continue
+
         formatted_file_to_dump = format_file_to_dump(file_to_dump)
-        url = f"http://{formatted_file_to_dump}.p2p"
-        print(url)
+        domain = f"{formatted_file_to_dump}.p2p"
+        url = f"http://{domain}"
+
         if not os.path.isdir(os.path.join(files_to_upload_dir, file_to_dump)):
             if any(
                 True
@@ -65,7 +66,7 @@ async def upload_files(session_maker, files=None):
             else:
                 url_hash, domain_hash = hash_req_res(
                     f"{url}/",
-                    "local",
+                    domain,
                     "GET",
                 )
                 logging.info(f"uploading {url}/ {url_hash}")
@@ -89,7 +90,7 @@ async def upload_files(session_maker, files=None):
 
                         url_hash, domain_hash = hash_req_res(
                             f"{url}/{formatted_folder}/{formatted_file}/",
-                            "-",
+                            domain,
                             "GET",
                         )
 

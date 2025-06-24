@@ -80,19 +80,12 @@ async def store_to_disk(session_maker, url_hash, domain_hash, data):
 
     if len(data_splits) != 1:
         logging.debug(f"Getting max hash num for {url_hash}")
-        max_hash_num = await _session_execute(
+        store_coros.append(_session_execute(
             session_maker,
             select(
                 func.max(StoredAssetHashes.id)
             ).where(StoredAssetHashes.hash == url_hash)
-        )
-        max_hash_num = max_hash_num.scalar()
-        if max_hash_num is not None:
-            max_hash_num += 1
-        else:
-            max_hash_num = 0
-    else:
-        max_hash_num = 0
+        ))
 
     hashes_folder = os.path.join(hashes_dir, url_hash)
     if not os.path.exists(hashes_folder):
@@ -100,13 +93,26 @@ async def store_to_disk(session_maker, url_hash, domain_hash, data):
         os.makedirs(hashes_folder, exist_ok=True)
 
     # Get max id of stored_asset_hashes
-    await asyncio.gather(
+    store_results = await asyncio.gather(
         *store_coros,
         _session_add_all(session_maker, new_asset_parts),
         return_exceptions=True,
     )
     store_coros.clear()
     new_asset_parts.clear()
+
+    if len(data_splits) != 1:
+        max_hash_num = store_results[-1]
+
+        if max_hash_num is None:
+            max_hash_num = 0
+        elif isinstance(max_hash_num, IntegrityError):
+            logging.error(max_hash_num)
+            max_hash_num = 0
+        else:
+            max_hash_num = max_hash_num.scalar() + 1
+    else:
+        max_hash_num = 0
 
     logging.debug(f"Generating {n_hashes} hashes for {url_hash}")
 

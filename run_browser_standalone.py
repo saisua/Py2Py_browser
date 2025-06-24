@@ -1,5 +1,8 @@
 import asyncio
 import os
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
 
 from config import (
     data_dir,

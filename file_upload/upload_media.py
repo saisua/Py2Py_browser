@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from pathlib import Path
 from math import ceil
 
 from config import media_split_size, DEBUG_DISABLE_UPLOAD_MEDIA_DATA
@@ -9,66 +10,105 @@ from browser.utils.hash_req_res import hash_req_res
 from files.utils.read_bytes import _read_bytes
 from files.store_to_disk import store_to_disk
 
+from file_upload.utils.format_file import format_file_to_dump
+
 
 MEDIA_HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Video Loader</title>
+    <title>Media Loader</title>
 </head>
 <body>
-    <video id="my-p2p-video" controls autoplay/>
+    <{media_type} id="my-p2p-{media_type}" controls></{media_type}>
     <script defer>
-        const video = document.getElementById('my-p2p-video');
-        const mediaSource = new MediaSource();
-        let sourceBuffer;
-        let partNumber = 0;
+        const media = document.getElementById('my-p2p-{media_type}');
+        const mimeCodec = `{buffer_string}`;
+        const BUFFER_THRESHOLD = 30; // seconds
+        const BUFFER_WAIT_TIME = 7000; // milliseconds
 
-        // Create object URL for the MediaSource
-        video.src = URL.createObjectURL(mediaSource);
+        if (
+            "MediaSource" in window &&
+            MediaSource.isTypeSupported(mimeCodec)
+        ) {{
+            const mediaSource = new MediaSource();
+            let sourceBuffer;
+            let partNumber = 0;
+            let isBuffering = false;
 
-        mediaSource.addEventListener('sourceopen', () => {{
-            // Initialize source buffer (adjust codecs to match your video)
-            sourceBuffer = mediaSource.addSourceBuffer(
-                {buffer_string}
-            );
+            mediaSource.addEventListener('sourceopen', () => {{
+                sourceBuffer = mediaSource.addSourceBuffer(mimeCodec);
+                checkBuffer();
+            }});
 
-            // Load first part
-            loadVideoPart(partNumber);
-        }});
+            media.src = URL.createObjectURL(mediaSource);
 
-        async function loadVideoPart(partNumber) {{
-            try {{
-                const response = await fetch(
-                    `http://stream.{media_path}.p2p/${{partNumber}}/`
+            function checkBuffer() {{
+                const buffer_size = (
+                    media.buffered.length > 0 ?
+                    sourceBuffer.buffered.end(
+                        media.buffered.length - 1
+                    ) - media.currentTime :
+                    0
                 );
-                const buffer = await response.arrayBuffer();
-
-                sourceBuffer.addEventListener('updateend', () => {{
-                    // When current part is loaded, queue next part
-                    if (
-                        !sourceBuffer.updating
-                        && mediaSource.readyState === 'open'
-                    ) {{
-                        partNumber++;
-                        loadVideoPart(partNumber);
-                    }}
-                }}, {{ once: true }});
-
-                if (!sourceBuffer.updating) {{
-                    sourceBuffer.appendBuffer(buffer);
+                // console.log("buffer_size", buffer_size);
+                if (
+                    buffer_size < BUFFER_THRESHOLD &&
+                    !isBuffering
+                ) {{
+                    isBuffering = true;
+                    loadMediaPart(partNumber);
+                    partNumber++;
+                }} else {{
+                    // console.log("waiting 10s to buffer");
+                    setTimeout(() => {{
+                        isBuffering = false;
+                        checkBuffer();
+                    }}, BUFFER_WAIT_TIME);
                 }}
-            }} catch (error) {{
-                console.error('Error loading video part:', error);
             }}
+
+            async function loadMediaPart(partNumber) {{
+                try {{
+                    const response = await fetch(
+                        `http://stream.{media_domain}/${{partNumber}}/`
+                    );
+                    const buffer = await response.arrayBuffer();
+
+                    sourceBuffer.addEventListener('updateend', () => {{
+                        if (
+                            !sourceBuffer.updating &&
+                            mediaSource.readyState === 'open'
+                        ) {{
+                            isBuffering = false;
+                            checkBuffer();
+                        }} else {{
+                            // console.log("waiting 10s to buffer");
+                            setTimeout(() => {{
+                                isBuffering = false;
+                                checkBuffer();
+                            }}, BUFFER_WAIT_TIME);
+                        }}
+                    }}, {{ once: true }});
+
+                    if (!sourceBuffer.updating) {{
+                        sourceBuffer.appendBuffer(buffer);
+                    }}
+                }} catch (error) {{
+                    console.error('Error loading media part:', error);
+                    mediaSource.endOfStream();
+                }}
+            }}
+        }} else {{
+            console.error("Unsupported MIME type or codec: ", mimeCodec);
         }}
-        </script>
+    </script>
 </body>
 </html>
 """
 
 
-def gen_buffer_string(ext: str) -> str:
+def gen_media_type(ext: str) -> str:
     """Generate proper MediaSource buffer string for given video extension.
 
     Args:
@@ -81,18 +121,19 @@ def gen_buffer_string(ext: str) -> str:
         ValueError: If extension is not supported
     """
     codec_map = {
-        "mp4": "video/mp4; codecs='avc1.42E01E, mp4a.40.2'",
-        "webm": "video/webm; codecs='vp9, opus'",
-        "mkv": "video/x-matroska; codecs='avc1.42E01E, mp4a.40.2'",
-        "avi": "video/x-msvideo; codecs='avc1.42E01E, mp4a.40.2'",
-        "mov": "video/quicktime; codecs='avc1.42E01E, mp4a.40.2'",
-        "wmv": "video/x-ms-wmv; codecs='wvc1'",
-        "flv": "video/x-flv; codecs='avc1.42E01E, mp4a.40.2'",
-        "ogg": "video/ogg; codecs='theora, vorbis'",
-        "m4a": "audio/mp4; codecs='mp4a.40.2'",
-        "aac": "audio/mp4; codecs='mp4a.40.2'",
-        "flac": "audio/flac",
-        "wma": "audio/x-ms-wma"
+        # "mp4": "video/mp4",
+        "webm": "video/webm",
+        # "mkv": "video/x-matroska",
+        # "avi": "video/x-msvideo",
+        # "mov": "video/quicktime",
+        # "wmv": "video/x-ms-wmv",
+        # "flv": "video/x-flv",
+        # "ogg": "video/ogg",
+        "m4a": "audio/mp4",
+        "aac": "audio/mp4",
+        "weba": "audio/webm",
+        # "flac": "audio/flac",
+        # "wma": "audio/x-ms-wma"
     }
 
     try:
@@ -102,11 +143,13 @@ def gen_buffer_string(ext: str) -> str:
 
 
 async def upload_media(session_maker, media_path: str):
-    ext = media_path.rsplit(".", 1)[-1]
-    html_url = f"http://{media_path}.p2p"
+    file_name = format_file_to_dump(Path(media_path).name.rstrip('/'))
+    ext = file_name.rsplit(".", 1)[-1]
+    html_domain = f"{file_name}.p2p"
+    html_url = f"http://{html_domain}"
     html_url_hash, domain_hash = hash_req_res(
         f"{html_url}/",
-        "local",
+        html_domain,
         "GET",
     )
 
@@ -118,6 +161,8 @@ async def upload_media(session_maker, media_path: str):
             len(media_data) / media_split_size
         )
 
+        part_domain = f"stream.{html_domain}"
+
         part_coros = list()
         for i in range(num_parts):
             print("storing part", i, "of", num_parts - 1, flush=False)
@@ -125,11 +170,11 @@ async def upload_media(session_maker, media_path: str):
                 i * media_split_size:(i + 1) * media_split_size
             ]
 
-            part_url = f"http://stream.{media_path}.p2p/{i}"
+            part_url = f"http://{part_domain}/{i}"
 
             part_url_hash, domain_hash = hash_req_res(
                 f"{part_url}/",
-                "local",
+                part_domain,
                 "GET",
             )
             logging.info(f"uploading part {part_url} {part_url_hash}")
@@ -143,7 +188,7 @@ async def upload_media(session_maker, media_path: str):
                 )
             )
 
-            if len(part_coros) == 50:
+            if len(part_coros) == 10:
                 await asyncio.gather(*part_coros)
                 part_coros.clear()
 
@@ -152,10 +197,16 @@ async def upload_media(session_maker, media_path: str):
 
     url_hash, domain_hash = hash_req_res(
         f"{html_url}/",
-        "local",
+        html_domain,
         "GET",
     )
+    logging.debug(f"Url: {html_url}, "
+                  f"Domain: {html_domain} "
+                  f"-> {url_hash}")
     logging.info(f"uploading media html {html_url} {url_hash}")
+
+    buffer_string = gen_media_type(ext)
+    media_type = buffer_string.split("/", 1)[0]
 
     await store_to_disk(
         session_maker,
@@ -163,8 +214,9 @@ async def upload_media(session_maker, media_path: str):
         domain_hash,
         bytes(
             MEDIA_HTML_TEMPLATE.format(
-                media_path=media_path,
-                buffer_string=gen_buffer_string(ext),
+                media_domain=html_domain,
+                buffer_string=buffer_string,
+                media_type=media_type,
             ),
             "utf-8",
         ),

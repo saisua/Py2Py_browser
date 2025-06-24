@@ -18,7 +18,7 @@ from files.browser.load_req_from_disk import load_req_from_disk
 from p2p.request_hashes import request_hashes
 from p2p.requests.information_request import InformationRequest
 
-from db.peers import Peers
+from db.peers import Peers, PeerType
 from db.utils.execute import _session_execute
 
 
@@ -40,13 +40,17 @@ async def handle_route(
     method = request.method
     headers = request.headers
     url_hash, _ = hash_req_res(url, domain, method, headers)
-
-    logging.info(f">> {request.url} {url_hash}")
+    logging.debug(f"Request: {request.url}, "
+                  f"domain: {domain}, "
+                  f"method: {method}, "
+                  f"headers: {headers} -> {url_hash}")
 
     if not DEBUG_DISABLE_PEER_REQUESTS:
         peers = await _session_execute(
             session_maker,
-            select(Peers),
+            select(Peers).where(
+                Peers.type != PeerType.MYSELF,
+            ),
             scalar=True,
             many=True,
             expunge=True,
@@ -78,7 +82,7 @@ async def handle_route(
             data_response = await data_request
             data_responses.append(data_response)
 
-            print(f"Data request {i}/{len(data_requests)} done")
+            # print(f"Data request {i}/{len(data_requests)} done")
     else:
         data_responses = await asyncio.gather(
             *data_requests
@@ -98,6 +102,7 @@ async def handle_route(
         logging.info(" (^^)")
 
         try:
+            # print(f"Cached response: {cached_response}")
             await route.fulfill(
                 status=200,
                 body=cached_response,
