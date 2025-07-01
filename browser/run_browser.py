@@ -7,12 +7,15 @@ from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
 from config import (
     init_pages,
+    BROADCAST,
+    CLOSE,
 )
 
 from communication.communication_user import CommunicationUser
 
 from browser.handle_route import handle_route
 from browser.utils.on_page import on_page
+from browser.utils.check_communication import check_communication
 
 from files.browser.store_res_to_disk import store_res_to_disk
 
@@ -44,21 +47,51 @@ async def run_browser(session_maker, comm_user: CommunicationUser):
                 raise
 
         try:
+            communication_task = asyncio.create_task(
+                check_communication(comm_user, browser)
+            )
+
             while (
-                browser.is_connected()
-                and any((
+                browser.is_connected() and  # noqa: W504
+                any((
                     True
                     for page in context.pages
                     if not page.is_closed()
                 ))
             ):
                 await asyncio.sleep(1)
+
+            comm_user.send_message(
+                BROADCAST,
+                0,
+                CLOSE,
+                comm_user.id,
+            )
+            try:
+                await context.close()
+                await browser.close()
+            except Exception as e:
+                logging.error(e)
         except KeyboardInterrupt:
             await context.close()
             await browser.close()
+            comm_user.send_message(
+                BROADCAST,
+                0,
+                CLOSE,
+                comm_user.id,
+            )
         except asyncio.CancelledError:
             await context.close()
             await browser.close()
+            comm_user.send_message(
+                BROADCAST,
+                0,
+                CLOSE,
+                comm_user.id,
+            )
         except Exception as e:
             logging.error(e)
             raise
+        finally:
+            communication_task.cancel()

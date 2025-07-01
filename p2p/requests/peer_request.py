@@ -1,9 +1,13 @@
 from datetime import datetime
 import asyncio
+import logging
 
 from sqlalchemy import select
 
-from config import PEERTYPE_CLIENT
+from config import (
+    logger,
+    PEERTYPE_CLIENT,
+)
 from db.peers import Peers
 
 from db.utils.add_all import _session_add_all
@@ -27,7 +31,7 @@ async def store_online_peers(session_maker, peer_addrs, sids):
 
     responses = await asyncio.gather(*health_check_coros)
 
-    print(responses)
+    # print(responses)
 
     now = datetime.now()
     # TODO: Use key
@@ -41,7 +45,8 @@ async def store_online_peers(session_maker, peer_addrs, sids):
         if "status" in response and response['status'] == 0
     ]
 
-    print(new_peers)
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(f"New peers: {new_peers}")
 
     await _session_add_all(session_maker, new_peers)
 
@@ -56,7 +61,8 @@ class PeerRequest(Request):
     async def handle(self, request, *args, **kwargs):
         for task in self._peer_verification_task_refs:
             if task.done() or task.cancelled():
-                print("Task done", flush=True)
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug("Task done")
                 self._peer_verification_task_refs.remove(task)
 
         async with self.session_maker() as session:
@@ -103,7 +109,8 @@ class PeerRequest(Request):
 
     @staticmethod
     async def send(session_maker, addr, sid, peers=None):
-        print(f"Sending peer request to {addr}", flush=True)
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"Sending peer request to {addr}")
 
         request = {
             'code': PeerRequest.CODE,

@@ -2,9 +2,8 @@ import asyncio
 import os
 import logging
 
-logging.basicConfig(level=logging.DEBUG)
-
 from config import (
+    logger,
     data_dir,
     hashes_dir,
     UPLOAD_FILES,
@@ -16,6 +15,8 @@ from config import (
 if DEBUG_PURGE_DATA:
     from debugging.purge_data import purge_data
     purge_data()
+
+# noqa: E402
 
 from db import session_maker, engine
 
@@ -42,7 +43,8 @@ async def main():
     comm = Communication()
 
     if UPLOAD_FILES:
-        print("Uploading files", flush=False)
+        if logger.isEnabledFor(logging.INFO):
+            logger.info("Uploading files")
         upload_files_task = asyncio.create_task(
             upload_files(session_maker)
         )

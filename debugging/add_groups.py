@@ -12,11 +12,12 @@ from db.peers import Peers
 from db.utils.execute import _session_execute
 from db.utils.add_all import _session_add_all
 
-from config import chats
+from config import chats, logger
 
 
 def add_groups(session_maker):
-    logging.debug("Adding groups")
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug("Adding groups")
 
     # Create session and get all peers
     peers = asyncio.run(_session_execute(session_maker, select(Peers.address)))
@@ -52,9 +53,9 @@ def add_groups(session_maker):
     try:
         asyncio.run(_session_add_all(session_maker, new_groups))
     except Exception as e:
-        logging.error(e)
+        logger.error(e)
 
     try:
         asyncio.run(_session_add_all(session_maker, new_members))
     except Exception as e:
-        logging.error(e)
+        logger.error(e)

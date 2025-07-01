@@ -1,7 +1,9 @@
 import asyncio
 import os
+import logging
 
 from config import (
+    logger,
     data_dir,
     hashes_dir,
     UPLOAD_FILES,
@@ -15,6 +17,8 @@ if DEBUG_PURGE_DATA:
     from debugging.purge_data import purge_data
     purge_data()
 
+# noqa: E402
+
 from db import session_maker, engine
 
 from communication.communication import Communication
@@ -27,6 +31,7 @@ from browser.run_browser import run_browser
 
 from social.run_social import SocialApp
 from file_upload.upload_files import upload_files
+
 
 # if DEBUG_ADD_PEERS:
 #     from debugging.add_peers import add_peers
@@ -51,7 +56,8 @@ async def main():
     app = SocialApp(session_maker, social_user)
 
     if UPLOAD_FILES:
-        print("Uploading files", flush=False)
+        if logger.isEnabledFor(logging.INFO):
+            logger.info("Uploading files")
         upload_files_task = asyncio.create_task(
             upload_files(session_maker)
         )

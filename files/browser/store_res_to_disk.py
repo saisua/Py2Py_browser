@@ -2,7 +2,10 @@ import asyncio
 import os
 import logging
 
-from config import data_dir
+from config import (
+    logger,
+    data_dir,
+)
 
 from browser.utils.hash_req_res import hash_req_res
 
@@ -12,7 +15,8 @@ store_data_tasks = list()
 
 
 async def store_res_to_disk(session_maker, response):
-    logging.debug("Storing response to disk")
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug("Storing response to disk")
 
     for task in store_data_tasks:
         if task.done() or task.cancelled():
@@ -29,7 +33,8 @@ async def store_res_to_disk(session_maker, response):
         for file in os.listdir(data_dir)
         if file.startswith(url_hash)
     )):
-        logging.debug("Response already stored")
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("Response already stored")
         return
 
     try:
@@ -44,4 +49,5 @@ async def store_res_to_disk(session_maker, response):
         )
     )
 
-    logging.debug(f"<< {url}")
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(f"<< {url}")

@@ -1,6 +1,8 @@
 from typing import Any
 from multiprocessing import Manager
 
+from config import BROADCAST
+
 from communication.communication_user import CommunicationUser
 from communication.concurrency_layers import concurrency_layer_t
 
@@ -45,9 +47,24 @@ class Communication:
         content: Any,
         layer: concurrency_layer_t
     ):
-        self.users[user_id].recv_message(
-            priority,
-            content,
-            topic,
-            layer,
-        )
+        if user_id == BROADCAST:
+            for user_id in self.users.keys():
+                with self.users[user_id].lock:
+                    user = self.users[user_id]
+                    user.recv_message(
+                        priority,
+                        topic,
+                        content,
+                        layer,
+                    )
+                    self.users[user_id] = user
+        else:
+            with self.users[user_id].lock:
+                user = self.users[user_id]
+                user.recv_message(
+                    priority,
+                    topic,
+                    content,
+                    layer,
+                )
+                self.users[user_id] = user

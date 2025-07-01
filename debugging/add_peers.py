@@ -8,6 +8,7 @@ import bson
 from sqlalchemy import select, delete
 
 from config import (
+    logger,
     peer_addr_dir,
     DEBUG_REMOVE_PREV_PEERS,
     PEERTYPE_MYSELF,
@@ -31,7 +32,8 @@ async def add_peers(session_maker):
     if DEBUG_REMOVE_PREV_PEERS and not first_peers_removed:
         first_peers_removed = True
 
-        logging.info("Removing previous peers")
+        if logger.isEnabledFor(logging.INFO):
+            logger.info("Removing previous peers")
 
         await _session_execute(
             session_maker,
@@ -86,17 +88,18 @@ async def add_peers(session_maker):
                     **bundle_data,
                 )
             )
-            logging.debug(f"Added peer {addr}")
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(f"Added peer {addr}")
         except Exception as e:
-            logging.error(e)
+            logger.error(e)
 
     if len(new_peers):
         try:
             await _session_add_all(session_maker, new_peers)
         except Exception as e:
-            logging.error(e)
-    else:
-        logging.debug("No new peers to add")
+            logger.error(e)
+    elif logger.isEnabledFor(logging.DEBUG):
+        logger.debug("No new peers to add")
 
     # for testing
 

@@ -3,7 +3,11 @@ import logging
 from pathlib import Path
 from math import ceil
 
-from config import media_split_size, DEBUG_DISABLE_UPLOAD_MEDIA_DATA
+from config import (
+	logger,
+	media_split_size,
+	DEBUG_DISABLE_UPLOAD_MEDIA_DATA,
+)
 
 from browser.utils.hash_req_res import hash_req_res
 
@@ -153,7 +157,8 @@ async def upload_media(session_maker, media_path: str):
         "GET",
     )
 
-    logging.info(f"uploading media {html_url}/ {html_url_hash}")
+    if logger.isEnabledFor(logging.INFO):
+        logger.info(f"uploading media {html_url}/ {html_url_hash}")
 
     if not DEBUG_DISABLE_UPLOAD_MEDIA_DATA:
         media_data = await _read_bytes(media_path, decompress=False)
@@ -165,7 +170,10 @@ async def upload_media(session_maker, media_path: str):
 
         part_coros = list()
         for i in range(num_parts):
-            print("storing part", i, "of", num_parts - 1, flush=False)
+            if logger.isEnabledFor(logging.INFO):
+                logger.info(
+                    f"storing part {i} of {num_parts - 1}"
+                )
             part_data = media_data[
                 i * media_split_size:(i + 1) * media_split_size
             ]
@@ -177,7 +185,8 @@ async def upload_media(session_maker, media_path: str):
                 part_domain,
                 "GET",
             )
-            logging.info(f"uploading part {part_url} {part_url_hash}")
+            if logger.isEnabledFor(logging.INFO):
+                logger.info(f"uploading part {part_url} {part_url_hash}")
 
             part_coros.append(
                 store_to_disk(
@@ -200,10 +209,12 @@ async def upload_media(session_maker, media_path: str):
         html_domain,
         "GET",
     )
-    logging.debug(f"Url: {html_url}, "
-                  f"Domain: {html_domain} "
-                  f"-> {url_hash}")
-    logging.info(f"uploading media html {html_url} {url_hash}")
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(f"Url: {html_url}, "
+                     f"Domain: {html_domain} "
+                     f"-> {url_hash}")
+    if logger.isEnabledFor(logging.INFO):
+        logger.info(f"uploading media html {html_url} {url_hash}")
 
     buffer_string = gen_media_type(ext)
     media_type = buffer_string.split("/", 1)[0]

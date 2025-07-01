@@ -1,10 +1,4 @@
 import asyncio
-import logging
-
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-)
 
 from config import (
     UPLOAD_FILES,

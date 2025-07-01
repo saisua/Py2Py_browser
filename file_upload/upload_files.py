@@ -4,6 +4,7 @@ import asyncio
 import logging
 
 from config import (
+	logger,
 	files_to_upload_dir,
 	supported_video_extensions,
 	supported_audio_extensions,
@@ -35,11 +36,13 @@ async def read_file_store_to_disk(
 async def upload_files(session_maker, files=None):
     if files is None:
         files = os.listdir(files_to_upload_dir)
-        logging.info(
-            f"uploading {len(files)} files from {files_to_upload_dir}"
-        )
+        if logger.isEnabledFor(logging.INFO):
+            logger.info(
+                f"uploading {len(files)} files from {files_to_upload_dir}"
+            )
     else:
-        logging.info(f"uploading {len(files)} files")
+        if logger.isEnabledFor(logging.INFO):
+            logger.info(f"uploading {len(files)} files")
 
     files_to_dump_coros = list()
     for file_to_dump in files:
@@ -69,7 +72,8 @@ async def upload_files(session_maker, files=None):
                     domain,
                     "GET",
                 )
-                logging.info(f"uploading {url}/ {url_hash}")
+                if logger.isEnabledFor(logging.INFO):
+                    logger.info(f"uploading {url}/ {url_hash}")
 
                 files_to_dump_coros.append(
                     read_file_store_to_disk(
@@ -94,11 +98,12 @@ async def upload_files(session_maker, files=None):
                             "GET",
                         )
 
-                        logging.info(
-                            "uploading folder "
-                            f"{url}/{formatted_folder}/{formatted_file}/"
-                            f" {url_hash}"
-                        )
+                        if logger.isEnabledFor(logging.INFO):
+                            logger.info(
+                                "uploading folder "
+                                f"{url}/{formatted_folder}/{formatted_file}/"
+                                f" {url_hash}"
+                            )
 
                         files_to_dump_coros.append(
                             read_file_store_to_disk(

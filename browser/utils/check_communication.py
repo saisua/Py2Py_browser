@@ -3,7 +3,6 @@ import logging
 
 from config import (
     logger,
-    BROWSER_URL_CHANGE,
     CLOSE,
 )
 
@@ -12,7 +11,7 @@ from communication.communication_user import CommunicationUser
 
 async def check_communication(
     comm_user: CommunicationUser,
-    app: "App",  # type: ignore # noqa: F821
+    browser: "Browser",  # type: ignore # noqa: F821
 ):
     while True:
         messages = comm_user.get_messages()
@@ -25,21 +24,10 @@ async def check_communication(
                 logger.debug(f"Communication message: {message}")
             topic = message.topic
 
-            if topic == BROWSER_URL_CHANGE:
-                url = message.content
-                if url not in app.menu.menu_items:
-                    app.menu.set_item(
-                        0,
-                        url,
-                        app.menu._change_chat_callback(url),
-                    )
-                if logger.isEnabledFor(logging.DEBUG):
-                    logger.debug(f"Changing chat to: {url}")
-                await app.chat.change_chat(url)
-            elif topic == CLOSE:
+            if topic == CLOSE:
                 if logger.isEnabledFor(logging.INFO):
-                    logger.info("Closing social")
-                app.stop(send_close=False)
+                    logger.info("Closing browser")
+                await browser.close()
                 return
             elif logger.isEnabledFor(logging.WARNING):
                 logger.warning(f"Unknown message topic: {message.topic}")

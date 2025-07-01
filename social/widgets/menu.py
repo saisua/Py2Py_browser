@@ -13,6 +13,7 @@ from kivy.properties import NumericProperty, BooleanProperty
 from kivy.animation import Animation
 
 from config import (
+    logger,
     chats,
     MAX_CHAT_BUTTON_LENGTH,
 )
@@ -119,12 +120,18 @@ class ExpandableMenu(BoxLayout):
             callback: Callable = None,
             image_source: str = None,
     ):
-        logging.debug(f"Adding menu item: {text}")
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"Adding menu item: {text}")
 
         if len(text) > MAX_CHAT_BUTTON_LENGTH:
             text = text[:MAX_CHAT_BUTTON_LENGTH]
 
         item = MenuItem(text=text, image_source=image_source).build()
+        if self.is_expanded:
+            item.width = self.expanded_width
+        else:
+            item.width = self.collapsed_width
+
         if callback:
             item.bind(on_press=callback)
         self.menu_grid.add_widget(item)
@@ -132,21 +139,47 @@ class ExpandableMenu(BoxLayout):
 
         self.menu_items['text'] = item
 
+    def set_item(
+        self,
+        index: int,
+        text: str,
+        callback: Callable = None,
+        image_source: str = None,
+    ):
+        item = self.menu_grid.children[index]
+        item.text = text
+        item.image_source = image_source
+        if callback:
+            item.bind(on_press=callback)
+
     def on_toggle(self, instance, state):
-        logging.debug(f"Toggling menu: {state}")
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"Toggling menu: {state}")
         if self.is_expanded:
             self.collapse_menu()
         else:
             self.expand_menu()
 
     def expand_menu(self):
-        logging.debug("Expanding menu")
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("Expanding menu")
         self.is_expanded = True
         anim = Animation(width=self.expanded_width, duration=0.2)
         anim.start(self)
+        anim.start(self.menu_container)
+        anim.start(self.menu_grid)
+        for child in self.menu_grid.children:
+            if hasattr(child, 'width'):
+                anim.start(child)
 
     def collapse_menu(self):
-        logging.debug("Collapsing menu")
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("Collapsing menu")
         self.is_expanded = False
         anim = Animation(width=self.collapsed_width, duration=0.2)
         anim.start(self)
+        anim.start(self.menu_container)
+        anim.start(self.menu_grid)
+        for child in self.menu_grid.children:
+            if hasattr(child, 'width'):
+                anim.start(child)

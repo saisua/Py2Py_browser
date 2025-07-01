@@ -3,7 +3,11 @@ import asyncio
 import logging
 import traceback
 
-from config import chat_dir, max_chat_msgs
+from config import (
+    logger,
+    chat_dir,
+    max_chat_msgs,
+)
 
 from files.social.load_msg_from_disk import load_msg_from_disk
 
@@ -21,7 +25,8 @@ async def load_all_chat_msgs(
     request: bool = True,
 ) -> None:
     try:
-        logging.info(f"Loading all chat messages for {chat_hash}")
+        if logger.isEnabledFor(logging.INFO):
+            logger.info(f"Loading all chat messages for {chat_hash}")
 
         chat_path = os.path.join(chat_dir, chat_hash)
         if os.path.exists(chat_path):
@@ -30,9 +35,10 @@ async def load_all_chat_msgs(
                 reverse=reverse,
             )
         else:
-            logging.info(
-                f"Chat {chat_hash} does not exist, creating empty chat"
-            )
+            if logger.isEnabledFor(logging.INFO):
+                logger.info(
+                    f"Chat {chat_hash} does not exist, creating empty chat"
+                )
             messages = []
             os.makedirs(chat_path)
 
@@ -59,10 +65,11 @@ async def load_all_chat_msgs(
             )
 
         if len(messages):
-            logging.info(
-                f"Loading {len(messages[skip:skip + limit])}"
-                "messages from disk"
-            )
+            if logger.isEnabledFor(logging.INFO):
+                logger.info(
+                    f"Loading {len(messages[skip:skip + limit])}"
+                    "messages from disk"
+                )
 
             msgs = await asyncio.gather(*(
                 load_msg_from_disk(message, chat_hash)
@@ -75,5 +82,8 @@ async def load_all_chat_msgs(
                 reverse=reverse,
                 clear=clear,
             )
+
+        elif clear:
+            chat_widget.clear_messages()
     except Exception:
         logging.error(traceback.format_exc())

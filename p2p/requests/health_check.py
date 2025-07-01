@@ -1,3 +1,7 @@
+import logging
+
+from config import logger
+
 from p2p.utils.send_request import send_request
 
 from p2p.requests.request import Request
@@ -14,7 +18,8 @@ class HealthCheck(Request):
 
     @staticmethod
     async def send(session_maker, addr, sid):
-        print(f"Sending health check request to {addr}", flush=True)
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"Sending health check request to {addr}")
 
         return await send_request(
             session_maker,

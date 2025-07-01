@@ -9,7 +9,10 @@ from kivy.uix.scrollview import ScrollView
 from kivy.uix.textinput import TextInput
 from kivy.uix.button import Button
 
-from config import chat_dir
+from config import (
+    logger,
+    chat_dir,
+)
 
 from files.social.store_msg_to_disk import store_msg_to_disk
 
@@ -103,7 +106,8 @@ class Chat(BoxLayout):
         pos: int | None = None,
         store: bool = True,
     ):
-        logging.info(f"Sending message: {user}: {message}")
+        if logger.isEnabledFor(logging.INFO):
+            logger.info(f"Sending message: {user}: {message}")
 
         if user == self.app._user:
             label = Label(
@@ -130,7 +134,8 @@ class Chat(BoxLayout):
 
         if (
             self.chat_scroll.scroll_y > self.chat_scroll.height
-            or not self.chat_layout.children
+            or  # noqa: W503 W504
+            not self.chat_layout.children
         ):
             self.chat_scroll.scroll_y = 0
 
@@ -140,7 +145,8 @@ class Chat(BoxLayout):
             self.chat_layout.add_widget(label)
 
         if store:
-            logging.debug("Storing message")
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug("Storing message")
             chat_hash = _hash_str(chat)
 
             os.makedirs(os.path.join(chat_dir, chat_hash), exist_ok=True)
@@ -179,6 +185,9 @@ class Chat(BoxLayout):
             )
             self.message_input.text = ''
 
+    def clear_messages(self):
+        self.chat_layout.clear_widgets()
+
     async def send_messages(
         self,
         messages: list[dict[str, str]],
@@ -191,7 +200,7 @@ class Chat(BoxLayout):
             chat = self._chat
 
         if clear:
-            self.chat_layout.clear_widgets()
+            self.clear_messages()
 
         if reverse:
             pos = -1
@@ -214,7 +223,8 @@ class Chat(BoxLayout):
                 )
 
     async def reload_chat(self, *, request: bool = True):
-        logging.info("Reloading chat")
+        if logger.isEnabledFor(logging.INFO):
+            logger.info("Reloading chat")
         chat_hash = _hash_str(self._chat)
         await load_all_chat_msgs(self, chat_hash, request=request)
 
@@ -226,13 +236,14 @@ class Chat(BoxLayout):
         request: bool = True,
     ) -> bool:
         if (
-            not force
-            and chat == self._chat
-            and len(self.chat_layout.children) != 0
+            not force and  # noqa: W504
+            chat == self._chat and  # noqa: W504
+            len(self.chat_layout.children) != 0
         ):
             return False
 
-        logging.info(f"Changing chat to {chat}")
+        if logger.isEnabledFor(logging.INFO):
+            logger.info(f"Changing chat to {chat}")
 
         self._chat = chat
         await self.reload_chat(request=request)

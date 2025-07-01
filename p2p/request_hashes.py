@@ -5,7 +5,10 @@ import logging
 
 import numpy as np
 
-from config import data_dir
+from config import (
+    logger,
+    data_dir,
+)
 
 from p2p.requests.data_request import DataRequest
 
@@ -84,7 +87,8 @@ def choose_peer_requests(
                 peer_weights = np.exp(peer_weights - peer_weights.max())
                 peer_weights /= peer_weights.sum()
 
-    logging.debug(f"Peer requests: {peer_reqs}")
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(f"Peer requests: {peer_reqs}")
 
     return peer_reqs, url_hashes_num_parts
 
@@ -98,7 +102,8 @@ async def request_hashes(
     peers: list[str],
     peers_info: list[dict],
 ):
-    logging.debug("Requesting hashes")
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug("Requesting hashes")
 
     for task in _store_response_in_disk_tasks:
         if task.done() or task.cancelled():
@@ -138,7 +143,8 @@ async def request_hashes(
             ):
                 continue
 
-            logging.debug(" (~~)")
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(" (~~)")
 
             for part_hash, part_data in recv_response['data'].items():
                 _store_response_in_disk_tasks.append(
@@ -170,6 +176,7 @@ async def request_hashes(
             )
         ))
 
-    logging.debug(f"Requesting hashes done. Got {len(url_data)} bytes")
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(f"Requesting hashes done. Got {len(url_data)} bytes")
 
     return url_data

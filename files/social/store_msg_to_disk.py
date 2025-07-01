@@ -1,7 +1,10 @@
 import os
 import logging
 
-from config import chat_dir
+from config import (
+    logger,
+    chat_dir,
+)
 
 from utils.hash_str import _hash_str
 
@@ -27,7 +30,8 @@ async def store_msg_to_disk(
 
         chat_hash = _hash_str(chat)
 
-    logging.debug(f"Storing message to disk: {msg_hash} in chat: {chat}")
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(f"Storing message to disk: {msg_hash} in chat: {chat}")
 
     await _store_bson(
         os.path.join(chat_dir, chat_hash, msg_hash),

@@ -3,6 +3,10 @@ import logging
 from kivy.core.window import Window
 from kivy.uix.widget import Widget
 
+from config import (
+    logger,
+)
+
 
 class KeyboardListener(Widget):
     def __init__(self, app, **kwargs):
@@ -21,7 +25,8 @@ class KeyboardListener(Widget):
         self._keyboard.bind(on_key_up=self._on_keyboard_up)
 
     def _keyboard_closed(self):
-        logging.info('My keyboard have been closed!')
+        if logger.isEnabledFor(logging.INFO):
+            logger.info('My keyboard have been closed!')
 
         if not self.app._closed:
             return
@@ -34,7 +39,8 @@ class KeyboardListener(Widget):
             case 13:
                 self.app.chat.send_message(None)
             case _:
-                logging.debug(f'Unassigned keycode {keycode}')
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug(f'Unassigned keycode {keycode}')
                 return False
 
         return True

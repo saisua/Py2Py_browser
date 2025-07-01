@@ -3,7 +3,11 @@ import asyncio
 from datetime import timedelta
 import logging
 
-from config import data_dir, hashes_dir
+from config import (
+    logger,
+    data_dir,
+    hashes_dir,
+)
 
 from p2p.utils.send_request import send_request
 
@@ -21,7 +25,8 @@ class DataRequest(Request):
         self.session_maker = session_maker
 
     async def handle(self, request, *args, **kwargs):
-        logging.debug("Handling data request")
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("Handling data request")
 
         hashes = request.get('hashes')
         requested_peer_addrs = request.get('requested_peer_addrs')
@@ -33,7 +38,8 @@ class DataRequest(Request):
         )
 
         if asset_refs is None:
-            logging.debug("No asset refs found")
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug("No asset refs found")
             return {
                 'status': 0,
                 "data": {},
@@ -126,11 +132,12 @@ class DataRequest(Request):
 
             hash_hint.append(hint.part)
 
-        logging.debug(
-            f"Found {len(data)} assets, "
-            f"{len(hashes)} hashes, "
-            f"and {len(hints)} hints"
-        )
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                f"Found {len(data)} assets, "
+                f"{len(hashes)} hashes, "
+                f"and {len(hints)} hints"
+            )
 
         return {
             'status': 0,
@@ -149,7 +156,8 @@ class DataRequest(Request):
         requested_peer_addrs: list[str],
         max_timedelta: timedelta | None = None,
     ):
-        logging.debug(f"Sending data request to {addr}")
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"Sending data request to {addr}")
 
         request = {
             'code': DataRequest.CODE,

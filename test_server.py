@@ -1,37 +1,42 @@
 import asyncio
+import os
+
+from config import (
+    peer_addr_dir,
+    suffix,
+)
 
 from p2p.requests.data_request import DataRequest
 from p2p.requests.health_check import HealthCheck
 from p2p.requests.peer_request import PeerRequest
 
-with open("data/address.txt", "r") as f:
-    addr1 = f.read()
+target_suffix = "_2"
+for file in os.listdir(peer_addr_dir):
+    if file.endswith(f"-{target_suffix}"):
+        target_addr = file.split("-", 1)[0]
 
 send_hc = False
-send_peer = False
-send_data = True
+send_peer = True
+send_data = False
 
 
 async def test():
     if send_hc:
         response = await HealthCheck.send(
-            addr1,
+            target_addr,
             0
         )
         print(response)
     if send_peer:
-        with open("data/address_2.txt", "r") as f:
-            addr2 = f.read()
-
         response = await PeerRequest.send(
-            addr1,
+            target_addr,
             0,
-            peers=[addr2]
+            peers=[]
         )
         print(response)
     if send_data:
         response = await DataRequest.send(
-            addr1,
+            target_addr,
             0,
             {
                 "168ce875a2188cce97924a11f6a918df": -1,

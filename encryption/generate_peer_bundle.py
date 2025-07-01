@@ -5,7 +5,10 @@ import logging
 
 from sqlalchemy import select
 
-from config import PEERTYPE_MYSELF
+from config import (
+    logger,
+    PEERTYPE_MYSELF,
+)
 
 from db.utils.execute import _session_execute
 from db.peers import Peers
@@ -14,7 +17,8 @@ from encryption.utils.encrypt_with_password import encrypt_with_password
 
 
 async def _generate_peer_bundle(session_maker, address):
-    logging.debug("Generating peer bundle")
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug("Generating peer bundle")
 
     own_peer = await _session_execute(
         session_maker,
@@ -42,7 +46,8 @@ async def _generate_peer_bundle(session_maker, address):
 
 
 def _generate_random_password(length: int = 6) -> str:
-    logging.debug("Generating random password")
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug("Generating random password")
 
     return ''.join(
         random.choices(

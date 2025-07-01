@@ -1,9 +1,18 @@
 import logging
+import os
 
-logging_level = logging.WARNING
+from config.global_config import DEVELOPMENT
 
-logging.basicConfig(level=logging_level)
-logger = logging.getLogger(__name__)
+if DEVELOPMENT:
+    logging_level = "DEBUG"
+else:
+    logging_level = os.getenv(
+        "P2Py_LOGGING_LEVEL",
+        "WARNING"
+    )
+
+logging.basicConfig(level=getattr(logging, logging_level))
+logger = logging.getLogger("P2Py_browser")
 logger.setLevel(logging_level)
 sqlalchemy_logger = logging.getLogger('sqlalchemy.engine')
 sqlalchemy_logger.setLevel(logging_level)

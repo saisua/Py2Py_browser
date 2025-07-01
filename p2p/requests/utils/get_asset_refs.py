@@ -1,7 +1,10 @@
 from collections import defaultdict
 import asyncio
+import logging
 
 from sqlalchemy import select, or_
+
+from config import logger
 
 from db.assets import Assets
 from db.stored_asset_parts import StoredAssetParts
@@ -17,7 +20,8 @@ async def get_asset_refs(
 ):
     # TODO: Check for empty dict values
     if not hashes:
-        print(f"No hashes: {hashes}")
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"No hashes: {hashes}")
         return None
 
     full_recv_assets = list()
@@ -39,7 +43,8 @@ async def get_asset_refs(
         and not any(recv_assets)
         and not any(recv_assets.values())
     ):
-        print(f"No hashes: {full_recv_assets}, {recv_assets}")
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"No hashes: {full_recv_assets}, {recv_assets}")
         return {
             'status': 0,
             "data": {},

@@ -2,7 +2,10 @@ import os
 import asyncio
 import logging
 
-from config import chat_dir
+from config import (
+    logger,
+    chat_dir,
+)
 
 from social.utils.get_latest_chat_msgs import get_latest_chat_msgs
 
@@ -20,7 +23,8 @@ class ChatRequest(Request):
         pass
 
     async def handle(self, request, *args, **kwargs):
-        logging.debug("Handling chat request")
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("Handling chat request")
 
         # origin_addr = request.
         chat_hash = request.get('chat_hash')
@@ -40,7 +44,8 @@ class ChatRequest(Request):
             last_message=last_message,
         )
 
-        logging.debug(f"Sending: {len(msg_hashes)} messages as response")
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"Sending: {len(msg_hashes)} messages as response")
 
         # Get all messages whose name is greater than last_message
         message_data_coros = [
@@ -67,7 +72,8 @@ class ChatRequest(Request):
         first_message: str | None = None,
         last_message: str | None = None,
     ):
-        logging.debug(f"Sending chat request to {addr}")
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"Sending chat request to {addr}")
 
         data = {
             'code': ChatRequest.CODE,

@@ -2,6 +2,8 @@ import logging
 
 from sqlalchemy import select
 
+from config import logger
+
 from db.peers import Peers
 from db.utils.execute import _session_execute
 
@@ -12,7 +14,8 @@ from encryption.utils.deserialize_keypair import _deserialize_keypair
 
 
 async def _load_encryption_keys(session_maker, sid):
-    logging.debug(f"Loading encryption keys for {sid}")
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(f"Loading encryption keys for {sid}")
 
     peer_data = await _session_execute(
         session_maker,

@@ -2,6 +2,8 @@ import asyncio
 import bson
 import logging
 
+from config import logger
+
 from encryption.encrypt_message import encrypt_message
 from encryption.decrypt_message import decrypt_message
 
@@ -18,7 +20,8 @@ async def send_request(
 ):
     (addr_str, port) = addr_to_str(addr)
 
-    logging.info(f"Sending request to {addr_str}:{port}")
+    if logger.isEnabledFor(logging.INFO):
+        logger.info(f"Sending request to {addr_str}:{port}")
 
     bson_req = bson.dumps(request)
     encrypted_req = await encrypt_message(session_maker, bson_req, sid)
@@ -29,10 +32,12 @@ async def send_request(
             port,
         )
     except Exception:
-        logging.warning(f"address {addr_str}:{port} is not available")
+        if logger.isEnabledFor(logging.WARNING):
+            logger.warning(f"address {addr_str}:{port} is not available")
         return None
 
-    logging.debug(f"Sending {len(encrypted_req)} bytes")
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(f"Sending {len(encrypted_req)} bytes")
 
     first_payload = (
         sid.to_bytes(4, 'big')
@@ -51,7 +56,8 @@ async def send_request(
 
     new_port = int.from_bytes(new_port, 'big')
 
-    logging.debug(f"Redirected to {new_port}")
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(f"Redirected to {new_port}")
 
     limit = 2**32 if large_response else 2**16
     try:
@@ -76,7 +82,8 @@ async def send_request(
         writer2.close()
         return None
 
-    logging.debug(f"Receiving {res_len} bytes")
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(f"Receiving {res_len} bytes")
 
     encrypted_res = b""
     while len(encrypted_res) < res_len:

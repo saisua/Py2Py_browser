@@ -5,7 +5,15 @@ from threading import Thread
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
 
-from config import chat_dir, suffix, username, default_chat
+from config import (
+	chat_dir,
+	suffix,
+	username,
+	default_chat,
+	ENABLE_KEYBOARD_LISTENER,
+	BROADCAST,
+	CLOSE,
+)
 
 from communication.communication import CommunicationUser
 
@@ -72,7 +80,10 @@ class SocialApp(App):
 
         self.layout = main_layout
 
-        self._keyboard = KeyboardListener(self)
+        if ENABLE_KEYBOARD_LISTENER:
+            self._keyboard = KeyboardListener(self)
+        else:
+            self._keyboard = None
 
         return self.layout
 
@@ -88,7 +99,7 @@ class SocialApp(App):
 
     def run(self):
         # As threading entry point
-        asyncio.run(self.async_run())
+        self._main_coro = asyncio.run(self.async_run())
 
     def start(self):
         self._main_thread = Thread(
@@ -97,7 +108,21 @@ class SocialApp(App):
         )
         self._main_thread.start()
 
-    def stop(self):
-        self._closed = True
-        super().stop()
-        self._main_thread.join()
+    def stop(self, *args, **kwargs):
+        return self.on_stop(*args, **kwargs)
+
+    def on_stop(self, send_close=True):
+        print("Stopping social")
+        if not self._closed:
+            self._closed = True
+            super().stop()
+            return
+
+        if send_close:
+            self._comm_user.send_message(
+                BROADCAST,
+                0,
+                CLOSE,
+                self._comm_user.id,
+            )
+        return True

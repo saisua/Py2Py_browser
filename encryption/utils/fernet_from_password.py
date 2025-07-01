@@ -1,6 +1,8 @@
 import base64
 import logging
 
+from config import logger
+
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.fernet import Fernet
@@ -9,7 +11,8 @@ from config import static_salt
 
 
 def fernet_from_password(password: str) -> Fernet:
-    logging.debug("Generating Fernet key from password")
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug("Generating Fernet key from password")
 
     key = base64.urlsafe_b64encode(
         PBKDF2HMAC(

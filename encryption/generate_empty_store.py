@@ -4,7 +4,10 @@ from signal_protocol import state, storage
 
 from sqlalchemy import select
 
-from config import PEERTYPE_MYSELF
+from config import (
+    logger,
+    PEERTYPE_MYSELF,
+)
 
 from db.peers import Peers
 
@@ -14,7 +17,8 @@ from db.utils.execute import _session_execute
 
 
 async def generate_empty_store(session_maker, sid=None):
-    logging.debug("Generating empty store")
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug("Generating empty store")
 
     if sid is None:
         sid = await _session_execute(

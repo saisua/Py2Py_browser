@@ -7,7 +7,10 @@ from sqlalchemy import select, update, delete
 
 from signal_protocol import curve, identity_key
 
-from config import PEERTYPE_MYSELF
+from config import (
+    logger,
+    PEERTYPE_MYSELF,
+)
 
 from db.peers import Peers
 
@@ -16,7 +19,8 @@ from db.utils.add import _session_add
 
 
 def _generate_encryption_keys():
-    logging.debug("Generating encryption keys")
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug("Generating encryption keys")
 
     identity_key_pair = identity_key.IdentityKeyPair.generate()
     registration_id = random.randint(1, 16384)
@@ -39,18 +43,19 @@ def _generate_encryption_keys():
 
 
 async def _store_encryption_keys(
-        session_maker,
-        address,
-        identity_key_pair,
-        registration_id,
-        signed_pre_key_id,
-        signed_pre_key_pair,
-        pre_key_id,
-        pre_key_pair,
-        timestamp,
-        sid
-        ) -> None:
-    logging.debug("Storing encryption keys in peer")
+    session_maker,
+    address,
+    identity_key_pair,
+    registration_id,
+    signed_pre_key_id,
+    signed_pre_key_pair,
+    pre_key_id,
+    pre_key_pair,
+    timestamp,
+    sid
+) -> None:
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug("Storing encryption keys in peer")
 
     new_own_peer = Peers(
         address=address,
@@ -71,7 +76,8 @@ async def _store_encryption_keys(
 
 
 async def initialize_encryption(session_maker, address):
-    logging.debug("Initializing encryption")
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug("Initializing encryption")
 
     # If exists peer in rowid 0, deserialize its data
     own_peer, own_addr_peer = await asyncio.gather(
@@ -94,7 +100,8 @@ async def initialize_encryption(session_maker, address):
     init_coros = []
 
     if own_addr_peer is not None and own_addr_peer[1] != PEERTYPE_MYSELF:
-        logging.debug("Deleting existing peer with current address")
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("Deleting existing peer with current address")
 
         init_coros.append(
             _session_execute(
@@ -106,7 +113,8 @@ async def initialize_encryption(session_maker, address):
         )
 
     if own_peer is not None:
-        logging.debug("Updating existing peer")
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("Updating existing peer")
 
         await asyncio.gather(*init_coros)
         init_coros.clear()
@@ -124,7 +132,8 @@ async def initialize_encryption(session_maker, address):
             )
         )
     else:
-        logging.debug("Generating new peer")
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("Generating new peer")
 
         (
             identity_key_pair,

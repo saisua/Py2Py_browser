@@ -3,6 +3,8 @@ from multiprocessing.synchronize import Lock as Lock_t
 from sortedcontainers import SortedList
 import logging
 
+from config import logger
+
 from communication.concurrency_layers import concurrency_layer_t
 from communication.message import Message
 
@@ -21,12 +23,21 @@ class CommunicationUser:
         user_concurrency_layer: concurrency_layer_t,
         lock: Lock_t,
     ):
-        logging.info(f'Created comm user {user_id}')
+        if logger.isEnabledFor(logging.INFO):
+            logger.info(f'Created comm user {user_id}')
         self.id = user_id
         self.comm = comm
         self.messages = SortedList()
         self.layer = user_concurrency_layer
         self.lock = lock
+
+    def __repr__(self):
+        return (
+            'CommunicationUser('
+            f'id={self.id}, '
+            f'layer={self.layer}, '
+            f'messages={self.messages})'
+        )
 
     def recv_message(
         self,
@@ -35,27 +46,21 @@ class CommunicationUser:
         content: Any,
         layer: concurrency_layer_t
     ):
-        if self.layer.must_lock(layer):
-            with self.lock:
-                self.messages.add(
-                    Message(
-                        self.id,
-                        priority,
-                        topic,
-                        content,
-                        layer
-                    )
-                )
-        else:
-            self.messages.add(
-                Message(
-                    self.id,
-                    priority,
-                    topic,
-                    content,
-                    layer
-                )
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                f'Receiving message '
+                f'from {self.id} "{topic}: {content}"'
             )
+
+        self.messages.add(
+            Message(
+                self.id,
+                priority,
+                topic,
+                content,
+                layer
+            )
+        )
 
     def send_message(
         self,
@@ -64,9 +69,11 @@ class CommunicationUser:
         topic: int,
         content: Any,
     ):
-        logging.debug(
-            f'Sending message p={priority} from {self.id} {topic}: {content}'
-        )
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                f'Sending message p={priority} from '
+                f'{self.id} {topic}: {content}'
+            )
         self.comm.send_message(
             user_id,
             priority,
@@ -76,11 +83,25 @@ class CommunicationUser:
         )
 
     def get_messages(self, max_n: int = 100) -> list[Message]:
+        self = self.update_self()
+
+        if len(self.messages) == 0:
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(f'No messages for {self.id} {self.messages}')
+            return list()
+
         with self.lock:
-            if len(self.messages) > max_n:
-                messages = self.messages[-max_n:]
-                self.messages = self.messages[:-max_n]
-                return messages
             messages = self.messages.copy()
-            self.messages.clear()
+
+            if len(messages) > max_n:
+                messages = messages[-max_n:]
+                self.messages = messages[:-max_n]
+            else:
+                self.messages.clear()
+
+            self.comm.users[self.id] = self
+
             return messages
+
+    def update_self(self):
+        return self.comm.users[self.id]

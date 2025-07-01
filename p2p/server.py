@@ -8,11 +8,14 @@ import logging
 from random import choice
 
 from config import (
+    logger,
     num_threads,
     peer_addr_dir,
     DEBUG_ADD_PEERS,
     DEBUG_SHARE_BUNDLE,
     suffix,
+    BROADCAST,
+    CLOSE,
 )
 
 from communication.communication_user import CommunicationUser
@@ -32,6 +35,7 @@ from encryption.encrypt_message import encrypt_message
 from encryption.decrypt_message import decrypt_message
 
 from utils.remove_tasks_forever import remove_tasks_forever
+from p2p.requests.utils.check_communication import check_communication
 
 
 class AsyncBsonServer:
@@ -99,16 +103,19 @@ class AsyncBsonServer:
             ip, port = writer.get_extra_info('peername')[:2]
             addr_str = f"{ip}:{port}"
 
-            logging.debug(f"[{port}] Received {data_len}B request from {addr_str}")
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(f"[{port}] Received {data_len}B "
+                             f"request from {addr_str}")
 
             data = b""
             while len(data) < data_len:
                 data += await reader.read(data_len - len(data))
 
-            logging.debug(f"[{port}] received {len(data)}B")
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(f"[{port}] received {len(data)}B")
 
             if not data:
-                logging.warning(f"no data / {data_len}")
+                logger.warning(f"no data / {data_len}")
                 return
 
             decrypted_data = await decrypt_message(
@@ -119,22 +126,22 @@ class AsyncBsonServer:
             request = bson.loads(decrypted_data)
 
             if not request.get('code'):
-                logging.warning("no code")
+                logger.warning("no code")
                 await self.write_error(writer)
                 return
 
-            print(f"Request: {request}")
+            # print(f"Request: {request}")
 
             request_code = request.get('code')
 
             handler = self.REQUEST_HANDLERS.get(request_code)
             if not handler:
-                logging.warning(f"invalid code {request_code}")
+                logger.warning(f"invalid code {request_code}")
                 await self.write_error(writer)
                 return
 
             response = await handler.handle(request)
-            print(f"Response: {response}")
+            # print(f"Response: {response}")
             bin_response = bson.dumps(response)
             encrypted_response = await encrypt_message(
                 self.session_maker,
@@ -142,7 +149,8 @@ class AsyncBsonServer:
                 sid
             )
 
-            logging.debug(f"Responding {len(bin_response)} bytes")
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(f"Responding {len(bin_response)} bytes")
 
             writer.write(len(encrypted_response).to_bytes(4, 'big'))
             await writer.drain()
@@ -153,7 +161,8 @@ class AsyncBsonServer:
             await self.write_error(writer)
         finally:
             self._force_set_data_size_sync(port, 0)
-            logging.debug(f"[{port}] request closed")
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(f"[{port}] request closed")
 
             writer.close()
             await writer.wait_closed()
@@ -162,7 +171,8 @@ class AsyncBsonServer:
             #     # self._set_data_size(port, 0, check_unoccupied=False),
             # )
 
-            # logging.debug(f"[{port}] closed")
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(f"[{port}] closed")
 
     def _force_set_data_size_sync(self, port, size):
         self._instance_sizes[port] = size
@@ -208,17 +218,21 @@ class AsyncBsonServer:
                             port,
                             (sid, data_len),
                         ):
-                            logging.debug(f"Assigned port {port} to {sid}")
+                            if logger.isEnabledFor(logging.DEBUG):
+                                logger.debug(f"Assigned port {port} to {sid}")
                             writer.write(port.to_bytes(4, 'big'))
                             await writer.drain()
                             return
-                    logging.debug(f"port {port} is handling {size}")
+                    if logger.isEnabledFor(logging.DEBUG):
+                        logger.debug(f"port {port} is handling {size}")
                 await asyncio.sleep(0.15)
-                logging.debug("waiting for data size")
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug("waiting for data size")
             else:
                 port = choice(list(self._instance_ports))
 
-                logging.critical(f"No port found, forcing use of {port}")
+                if logger.isEnabledFor(logging.CRITICAL):
+                    logger.critical(f"No port found, forcing use of {port}")
 
                 if await self._set_data_size(
                     port,
@@ -237,7 +251,8 @@ class AsyncBsonServer:
             self.redirect_request, self.host, self.port
         )
         addr = server.sockets[0].getsockname()
-        logging.info(f'Serving on {addr}')
+        if logger.isEnabledFor(logging.INFO):
+            logger.info(f'Serving on {addr}')
 
         servers = [server]
         for i in range(self.num_threads):
@@ -251,7 +266,8 @@ class AsyncBsonServer:
             self._instance_sizes[port] = 0
             self._instance_ports.append(port)
 
-            logging.info(f" instance {i} started on port {port}")
+            if logger.isEnabledFor(logging.INFO):
+                logger.info(f" instance {i} started on port {port}")
 
         addr_str = ':'.join(map(str, addr[:2]))
         addr = addr_to_bytes(*addr[:2])
@@ -276,6 +292,9 @@ class AsyncBsonServer:
             ) as f:
                 f.write(encryption_data)
 
+            if logger.isEnabledFor(logging.INFO):
+                logger.info(f"Shared bundle: {addr_str}-{suffix}")
+
         if DEBUG_ADD_PEERS:
             self._ref_tasks.append(
                 asyncio.create_task(
@@ -289,6 +308,10 @@ class AsyncBsonServer:
 
         server_tasks = []
         try:
+            communication_task = asyncio.create_task(
+                check_communication(self.comm_user, self)
+            )
+
             for server in servers:
                 await server.__aenter__()
 
@@ -301,6 +324,8 @@ class AsyncBsonServer:
         except Exception:
             logging.error(traceback.format_exc())
         finally:
+            communication_task.cancel()
+
             exit_coros = list()
             for server, server_task in zip(servers, server_tasks):
                 server_task.cancel()
@@ -320,6 +345,13 @@ class AsyncBsonServer:
         )
         self._main_thread.start()
 
-    def stop(self):
+    def stop(self, send_close=True):
+        if send_close:
+            self.comm_user.send_message(
+                BROADCAST,
+                0,
+                CLOSE,
+                self.comm_user.id,
+            )
         self.stopped.set()
         self._main_thread.join()

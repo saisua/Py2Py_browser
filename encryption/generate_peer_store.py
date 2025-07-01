@@ -3,6 +3,8 @@ import logging
 
 from signal_protocol import state, session, address
 
+from config import logger
+
 from encryption.utils.load_encryption_keys import _load_encryption_keys
 from encryption.generate_empty_store import generate_empty_store
 
@@ -29,7 +31,8 @@ async def generate_peer_store(session_maker, sid):
 
     addr_str = ':'.join(map(str, addr_to_str(addr)))
 
-    logging.debug(f"Generating peer store for {addr_str}")
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(f"Generating peer store for {addr_str}")
 
     protocol_address = address.ProtocolAddress(
         addr_str,

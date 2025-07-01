@@ -4,6 +4,7 @@ import logging
 from sqlalchemy import select
 
 from config import (
+    logger,
     DEBUG_DISABLE_DISK_REQUESTS,
     DEBUG_DISABLE_PEER_REQUESTS,
     DEBUG_RESOLVE_REQUESTS_SEQUENTIALLY,
@@ -40,10 +41,11 @@ async def handle_route(
     method = request.method
     headers = request.headers
     url_hash, _ = hash_req_res(url, domain, method, headers)
-    logging.debug(f"Request: {request.url}, "
-                  f"domain: {domain}, "
-                  f"method: {method}, "
-                  f"headers: {headers} -> {url_hash}")
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(f"Request: {request.url}, "
+                     f"domain: {domain}, "
+                     f"method: {method}, "
+                     f"headers: {headers} -> {url_hash}")
 
     if not DEBUG_DISABLE_PEER_REQUESTS:
         peers = await _session_execute(
@@ -82,7 +84,8 @@ async def handle_route(
             data_response = await data_request
             data_responses.append(data_response)
 
-            # print(f"Data request {i}/{len(data_requests)} done")
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(f"Data request {i}/{len(data_requests)} done")
     else:
         data_responses = await asyncio.gather(
             *data_requests
@@ -99,7 +102,8 @@ async def handle_route(
         peers_info = list()
 
     if cached_response:
-        logging.info(" (^^)")
+        if logger.isEnabledFor(logging.INFO):
+            logger.info(" (^^)")
 
         try:
             # print(f"Cached response: {cached_response}")
@@ -133,5 +137,6 @@ async def handle_route(
             except Exception as e:
                 logging.error(e)
 
-    logging.info(" (>>)")
+    if logger.isEnabledFor(logging.INFO):
+        logger.info(" (>>)")
     await route.continue_()

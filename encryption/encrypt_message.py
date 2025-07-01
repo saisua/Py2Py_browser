@@ -2,13 +2,17 @@ import logging
 
 from signal_protocol import session_cipher
 
-from config.debugging_config import DEBUG_DISABLE_ENCRYPTION
+from config import (
+    logger,
+    DEBUG_DISABLE_ENCRYPTION,
+)
 
 from encryption.generate_peer_store import generate_peer_store
 
 
 async def encrypt_message(session_maker, message, sid):
-    logging.debug(f"Encrypting message to {sid}")
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(f"Encrypting message to {sid}")
 
     if DEBUG_DISABLE_ENCRYPTION:
         return message
@@ -21,6 +25,7 @@ async def encrypt_message(session_maker, message, sid):
         message
     ).serialize()
 
-    logging.debug(f"Encrypted message ({len(encrypted_message)} bytes)")
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(f"Encrypted message ({len(encrypted_message)} bytes)")
 
     return encrypted_message

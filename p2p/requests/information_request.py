@@ -1,7 +1,10 @@
 import os
 import logging
 
-from config import hashes_dir
+from config import (
+    logger,
+    hashes_dir,
+)
 
 from p2p.utils.send_request import send_request
 
@@ -28,7 +31,8 @@ class InformationRequest(Request):
         )
 
         if asset_refs is None:
-            logging.debug("No asset refs found")
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug("No asset refs found")
             return {
                 'status': 0,
                 "data_refs": {},
@@ -98,7 +102,8 @@ class InformationRequest(Request):
         hashes: dict[str, int | list[int]],
         requested_peer_addrs: list[str],
     ):
-        print(f"Sending information request to {addr}", flush=True)
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"Sending information request to {addr}")
 
         request = {
             'code': InformationRequest.CODE,

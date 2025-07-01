@@ -2,6 +2,8 @@ import logging
 
 from signal_protocol import state, session, address
 
+from config import logger
+
 from encryption.utils.deserialize_identity_keypair import (
     _deserialize_identity_keypair
 )
@@ -9,7 +11,8 @@ from encryption.utils.deserialize_keypair import _deserialize_keypair
 
 
 def add_bundle_to_store(store, bundle_data: dict):
-    logging.debug("Adding bundle to store")
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug("Adding bundle to store")
 
     bundle_address = bundle_data['address']
     registration_id = bundle_data['registration_id']

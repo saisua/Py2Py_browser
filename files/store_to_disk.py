@@ -8,7 +8,13 @@ import logging
 from sqlalchemy import select, update, func
 from sqlalchemy.exc import IntegrityError
 
-from config import data_dir, hashes_dir, n_hashes, split_size
+from config import (
+    logger,
+    data_dir,
+    hashes_dir,
+    n_hashes,
+    split_size,
+)
 
 from db import Assets, StoredAssetParts, StoredAssetHashes
 from db.utils.add_all import _session_add_all
@@ -19,7 +25,8 @@ from files.utils.store_str import _store_str
 
 
 async def store_to_disk(session_maker, url_hash, domain_hash, data):
-    logging.debug(f"Storing to disk: {url_hash} {domain_hash}")
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(f"Storing to disk: {url_hash} {domain_hash}")
 
     data_splits = []
     for i in range(0, len(data), split_size):
@@ -36,7 +43,8 @@ async def store_to_disk(session_maker, url_hash, domain_hash, data):
 
     store_coros = []
     if asset is not None:
-        logging.debug(f"Updating asset: {url_hash}")
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"Updating asset: {url_hash}")
 
         store_coros.append(
             _session_execute(
@@ -50,7 +58,8 @@ async def store_to_disk(session_maker, url_hash, domain_hash, data):
             )
         )
     else:
-        logging.debug(f"Adding asset: {url_hash}")
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"Adding asset: {url_hash}")
 
         try:
             await _session_add_all(
@@ -63,10 +72,12 @@ async def store_to_disk(session_maker, url_hash, domain_hash, data):
                 ),)
             )
         except IntegrityError as e:
-            logging.error(e)
+            if logger.isEnabledFor(logging.ERROR):
+                logger.error(e)
             return
 
-    logging.debug(f"Storing {len(data_splits)} data splits to disk")
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(f"Storing {len(data_splits)} data splits to disk")
     for i, data_split in enumerate(data_splits):
         file_path = os.path.join(data_dir, f"{url_hash}{i}")
 
@@ -79,7 +90,8 @@ async def store_to_disk(session_maker, url_hash, domain_hash, data):
         ))
 
     if len(data_splits) != 1:
-        logging.debug(f"Getting max hash num for {url_hash}")
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"Getting max hash num for {url_hash}")
         store_coros.append(_session_execute(
             session_maker,
             select(
@@ -89,7 +101,8 @@ async def store_to_disk(session_maker, url_hash, domain_hash, data):
 
     hashes_folder = os.path.join(hashes_dir, url_hash)
     if not os.path.exists(hashes_folder):
-        logging.debug(f"Creating hashes folder: {hashes_folder}")
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"Creating hashes folder: {hashes_folder}")
         os.makedirs(hashes_folder, exist_ok=True)
 
     # Get max id of stored_asset_hashes
@@ -107,14 +120,16 @@ async def store_to_disk(session_maker, url_hash, domain_hash, data):
         if max_hash_num is None:
             max_hash_num = 0
         elif isinstance(max_hash_num, IntegrityError):
-            logging.error(max_hash_num)
+            if logger.isEnabledFor(logging.ERROR):
+                logger.error(max_hash_num)
             max_hash_num = 0
         else:
             max_hash_num = max_hash_num.scalar() + 1
     else:
         max_hash_num = 0
 
-    logging.debug(f"Generating {n_hashes} hashes for {url_hash}")
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(f"Generating {n_hashes} hashes for {url_hash}")
 
     new_hashes = []
     hashed = set()
@@ -157,7 +172,8 @@ async def store_to_disk(session_maker, url_hash, domain_hash, data):
             for ind in combination_indices
         ))
 
-    logging.debug(f"Storing {len(new_hashes)} hashes to disk")
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(f"Storing {len(new_hashes)} hashes to disk")
 
     await asyncio.gather(
         *store_coros,

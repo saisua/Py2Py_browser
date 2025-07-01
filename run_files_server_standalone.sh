@@ -1,0 +1,1 @@
+P2Py_SUFFIX=_2 P2Py_LOGGING_LEVEL=INFO P2Py_DEBUG_DISABLE_UPLOAD_MEDIA_DATA=false python3 run_server_standalone.py

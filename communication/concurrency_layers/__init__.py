@@ -4,7 +4,7 @@ from .process import ProcessLayer
 
 
 concurrency_layer_t = (
-    MainThreadLayer |
-    ThreadLayer |
+    MainThreadLayer |  # noqa: W504
+    ThreadLayer |  # noqa: W504
     ProcessLayer
 )
