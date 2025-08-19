@@ -74,5 +74,3 @@ async def add_new_peer_bundle(
 		logging.error("Error adding peer")
 		logging.exception(e)
 		raise
-
-	# add_bundle_to_store(store, deserialized_bundle)

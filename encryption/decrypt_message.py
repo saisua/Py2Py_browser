@@ -17,12 +17,12 @@ async def decrypt_message(session_maker, encrypted_message, sid):
     if DEBUG_DISABLE_ENCRYPTION:
         return encrypted_message
 
-    store, peer_address = await generate_peer_store(session_maker, sid)
+    store, peer_proto_address = await generate_peer_store(session_maker, sid)
 
     # Deserialize the encrypted message before decryption
     message = session_cipher.message_decrypt(
         store,
-        peer_address,
+        peer_proto_address,
         encrypted_message
     )
 
