@@ -36,6 +36,7 @@ chats = os.getenv(
 	"P2Py_SOCIAL_CHATS",
 	"ME"
 ).split(',')
+chats.append("Loading homepage")
 
 default_chat = chats[0]
 

@@ -4,7 +4,7 @@ from sqlalchemy import select
 
 from config import logger
 
-from db.peers import Peers
+from db.models.peers import Peers
 from db.utils.execute import _session_execute
 
 from encryption.utils.deserialize_identity_keypair import (

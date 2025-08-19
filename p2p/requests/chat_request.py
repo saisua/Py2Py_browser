@@ -71,6 +71,7 @@ class ChatRequest(Request):
         chat_hash,
         first_message: str | None = None,
         last_message: str | None = None,
+        own_sid: int | None = None,
     ):
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(f"Sending chat request to {addr}")
@@ -86,4 +87,10 @@ class ChatRequest(Request):
         if last_message is not None:
             data['last_message'] = last_message
 
-        return await send_request(session_maker, addr, sid, data)
+        return await send_request(
+            session_maker,
+            addr,
+            sid,
+            data,
+            own_sid=own_sid,
+        )

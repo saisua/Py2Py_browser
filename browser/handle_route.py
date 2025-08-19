@@ -19,7 +19,7 @@ from files.browser.load_req_from_disk import load_req_from_disk
 from p2p.request_hashes import request_hashes
 from p2p.requests.information_request import InformationRequest
 
-from db.peers import Peers, PeerType
+from db.models.peers import Peers, PeerType
 from db.utils.execute import _session_execute
 
 

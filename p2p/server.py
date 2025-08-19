@@ -30,7 +30,7 @@ from p2p.requests.chat_request import ChatRequest
 from p2p.utils.addr_to_bytes import addr_to_bytes
 
 from encryption.initialize_encryption import initialize_encryption
-from encryption.generate_peer_bundle import _generate_peer_bundle
+from encryption.generate_peer_bundle import generate_peer_encrypted_bundle
 from encryption.encrypt_message import encrypt_message
 from encryption.decrypt_message import decrypt_message
 
@@ -85,9 +85,6 @@ class AsyncBsonServer:
             handler.CODE: handler(session_maker)
             for handler in self._REQUEST_HANDLERS_CLASSES
         }
-
-    async def initialize_encryption(self, address):
-        await initialize_encryption(self.session_maker, address)
 
     async def write_error(self, writer):
         response = {"status": -1}
@@ -275,9 +272,10 @@ class AsyncBsonServer:
 
         if DEBUG_SHARE_BUNDLE:
             # It should be encrypted but its for debugging
-            encryption_data = await _generate_peer_bundle(
+            encryption_data, _ = await generate_peer_encrypted_bundle(
                 self.session_maker,
-                addr,
+                own_password="debug_password",
+                other_password="debug_password",
             )
 
             os.makedirs(peer_addr_dir, exist_ok=True)

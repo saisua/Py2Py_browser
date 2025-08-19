@@ -1,6 +1,6 @@
 from sqlalchemy import Column, String, DateTime, ForeignKey
 
-from .base import Base
+from ..base import Base
 
 
 class GroupMembers(Base):

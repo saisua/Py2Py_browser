@@ -12,7 +12,9 @@ from config import static_salt
 
 def fernet_from_password(password: str) -> Fernet:
     if logger.isEnabledFor(logging.DEBUG):
-        logger.debug("Generating Fernet key from password")
+        logger.debug(
+            "Generating Fernet encryption/decryption key from password"
+        )
 
     key = base64.urlsafe_b64encode(
         PBKDF2HMAC(

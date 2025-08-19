@@ -6,9 +6,9 @@ from sqlalchemy import select
 
 from utils.hash_str import _hash_str
 
-from db.groups import Groups
-from db.group_members import GroupMembers
-from db.peers import Peers
+from db.models.groups import Groups
+from db.models.group_members import GroupMembers
+from db.models.peers import Peers
 from db.utils.execute import _session_execute
 from db.utils.add_all import _session_add_all
 

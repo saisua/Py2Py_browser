@@ -1,4 +1,8 @@
 import asyncio
+import os
+
+# TODO: Remove after testing
+os.environ["P2Py_SUFFIX"] = "_2"
 
 from config import (
     UPLOAD_FILES,

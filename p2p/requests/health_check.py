@@ -17,7 +17,7 @@ class HealthCheck(Request):
         return {'status': 0}
 
     @staticmethod
-    async def send(session_maker, addr, sid):
+    async def send(session_maker, addr, sid, own_sid=None):
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(f"Sending health check request to {addr}")
 
@@ -26,4 +26,5 @@ class HealthCheck(Request):
             addr,
             sid,
             {'code': HealthCheck.CODE},
+            own_sid=own_sid,
         )

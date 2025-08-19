@@ -8,6 +8,7 @@ from encryption.encrypt_message import encrypt_message
 from encryption.decrypt_message import decrypt_message
 
 from p2p.utils.addr_to_str import addr_to_str
+from p2p.utils.get_peer_sid import get_peer_sid
 
 
 async def send_request(
@@ -17,14 +18,11 @@ async def send_request(
     request,
     *,
     large_response=False,
+    own_sid: int | None = None,
 ):
     (addr_str, port) = addr_to_str(addr)
 
-    if logger.isEnabledFor(logging.INFO):
-        logger.info(f"Sending request to {addr_str}:{port}")
-
-    bson_req = bson.dumps(request)
-    encrypted_req = await encrypt_message(session_maker, bson_req, sid)
+    logging.error(f"###\n### Sending msg to {addr_str}:{port}\n###")
 
     try:
         reader, writer = await asyncio.open_connection(
@@ -36,14 +34,30 @@ async def send_request(
             logger.warning(f"address {addr_str}:{port} is not available")
         return None
 
+    if logger.isEnabledFor(logging.INFO):
+        logger.info(f"Sending request to {addr_str}:{port}")
+
+    bson_req = bson.dumps(request)
+
     if logger.isEnabledFor(logging.DEBUG):
-        logger.debug(f"Sending {len(encrypted_req)} bytes")
+        logger.debug(f"Encrypting {len(bson_req)} bytes: {bson_req}")
+
+    encrypted_req = await encrypt_message(session_maker, bson_req, sid)
+
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(f"Sending {len(encrypted_req)} bytes: {encrypted_req}")
+
+    if own_sid is None:
+        own_sid = await get_peer_sid(session_maker)
 
     first_payload = (
-        sid.to_bytes(4, 'big')
+        own_sid.to_bytes(4, 'big')
         +  # noqa: W504 W503
         len(encrypted_req).to_bytes(4, 'big')
     )
+
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(f"Sending {len(first_payload)} bytes: {first_payload}")
 
     writer.write(first_payload)
     await writer.drain()
@@ -72,6 +86,9 @@ async def send_request(
     finally:
         writer.close()
 
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(f"Sending {len(encrypted_req)} bytes: {encrypted_req}")
+
     writer2.write(encrypted_req)
     await writer2.drain()
 
@@ -89,7 +106,13 @@ async def send_request(
     while len(encrypted_res) < res_len:
         encrypted_res += await reader2.read(res_len - len(encrypted_res))
 
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(f"Received {len(encrypted_res)} bytes: {encrypted_res}")
+
     res = await decrypt_message(session_maker, encrypted_res, sid)
+
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(f"Decrypted {len(res)} bytes: {res}")
 
     try:
         return bson.loads(res)
@@ -98,4 +121,5 @@ async def send_request(
         return None
     finally:
         writer2.close()
+        await writer.wait_closed()
         await writer2.wait_closed()

@@ -4,6 +4,8 @@ from signal_protocol import state, session, address
 
 from config import logger
 
+from p2p.utils.addr_to_str import addr_to_str
+
 from encryption.utils.deserialize_identity_keypair import (
     _deserialize_identity_keypair
 )
@@ -23,6 +25,10 @@ def add_bundle_to_store(store, bundle_data: dict):
     signed_pre_key_priv = bundle_data['signed_pre_key']
     signed_pre_key_pub = bundle_data['signed_pre_key_pub']
     identity_key_pair = bundle_data['identity_key']
+
+    if isinstance(bundle_address, bytes):
+        bundle_ip, bundle_port = addr_to_str(bundle_address)
+        bundle_address = f"{bundle_ip}:{bundle_port}"
 
     protocol_address = address.ProtocolAddress(
         bundle_address,

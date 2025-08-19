@@ -7,4 +7,4 @@ def addr_to_bytes(addr: str, port: int | str | None = None) -> bytes:
         if not isinstance(port, int):
             port = int(port)
         ip += port.to_bytes(2, 'big')
-    return ip
+    return bytes(ip)

@@ -25,11 +25,12 @@ async def generate_peer_store(session_maker, sid):
         ),
         store
     ) = await asyncio.gather(
-        _load_encryption_keys(session_maker, sid),
+        _load_encryption_keys(session_maker, sid),  # TODO: Remove, get from generate_empty_store
         generate_empty_store(session_maker, sid)
     )
 
-    addr_str = ':'.join(map(str, addr_to_str(addr)))
+    addr_ip, addr_port = addr_to_str(addr)
+    addr_str = f"{addr_ip}:{addr_port}"
 
     if logger.isEnabledFor(logging.DEBUG):
         logger.debug(f"Generating peer store for {addr_str}")
@@ -54,5 +55,8 @@ async def generate_peer_store(session_maker, sid):
 
     # Alice processes Bob's pre-key bundle
     session.process_prekey_bundle(protocol_address, store, bundle)
+
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(f"Generated peer store for {addr_str}")
 
     return store, protocol_address

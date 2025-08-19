@@ -6,10 +6,10 @@ from sqlalchemy import select, or_
 
 from config import logger
 
-from db.assets import Assets
-from db.stored_asset_parts import StoredAssetParts
-from db.asset_hints import AssetHints
-from db.stored_asset_hashes import StoredAssetHashes
+from db.models.assets import Assets
+from db.models.stored_asset_parts import StoredAssetParts
+from db.models.asset_hints import AssetHints
+from db.models.stored_asset_hashes import StoredAssetHashes
 from db.utils.execute import _session_execute
 
 

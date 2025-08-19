@@ -12,13 +12,13 @@ from config import (
 )
 
 from .base import Base
-from .peers import Peers
-from .assets import Assets
-from .asset_hints import AssetHints
-from .stored_asset_parts import StoredAssetParts
-from .stored_asset_hashes import StoredAssetHashes
-from .groups import Groups
-from .group_members import GroupMembers
+from .models.peers import Peers
+from .models.assets import Assets
+from .models.asset_hints import AssetHints
+from .models.stored_asset_parts import StoredAssetParts
+from .models.stored_asset_hashes import StoredAssetHashes
+from .models.groups import Groups
+from .models.group_members import GroupMembers
 
 
 async def setup_database():

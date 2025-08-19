@@ -13,7 +13,7 @@ from db import session_maker
 from communication.communication import Communication
 from communication.concurrency_layers import MainThreadLayer, ThreadLayer
 
-from social.run_social import SocialApp
+from social.social import SocialApp
 
 from p2p.server import AsyncBsonServer
 

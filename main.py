@@ -27,9 +27,9 @@ from communication.concurrency_layers import ThreadLayer
 
 from p2p.server import AsyncBsonServer
 
-from browser.run_browser import run_browser
+from browser.browser import run_browser
 
-from social.run_social import SocialApp
+from social.social import SocialApp
 from file_upload.upload_files import upload_files
 
 

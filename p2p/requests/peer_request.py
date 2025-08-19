@@ -8,7 +8,7 @@ from config import (
     logger,
     PEERTYPE_CLIENT,
 )
-from db.peers import Peers
+from db.models.peers import Peers
 
 from db.utils.add_all import _session_add_all
 
@@ -108,7 +108,7 @@ class PeerRequest(Request):
         return {'status': 0, 'peers': peer_addrs}
 
     @staticmethod
-    async def send(session_maker, addr, sid, peers=None):
+    async def send(session_maker, addr, sid, peers=None, own_sid=None):
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(f"Sending peer request to {addr}")
 
@@ -117,4 +117,10 @@ class PeerRequest(Request):
         }
         if peers:
             request['peers'] = peers
-        return await send_request(session_maker, addr, sid, request)
+        return await send_request(
+            session_maker,
+            addr,
+            sid,
+            request,
+            own_sid=own_sid,
+        )

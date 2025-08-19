@@ -155,6 +155,7 @@ class DataRequest(Request):
         hashes: dict[str, int | list[int]],
         requested_peer_addrs: list[str],
         max_timedelta: timedelta | None = None,
+        own_sid: int | None = None,
     ):
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(f"Sending data request to {addr}")
@@ -173,4 +174,5 @@ class DataRequest(Request):
             sid,
             request,
             large_response=True,
+            own_sid=own_sid,
         )

@@ -28,7 +28,7 @@ from communication.concurrency_layers import (
 
 from p2p.server import AsyncBsonServer
 
-from browser.run_browser import run_browser
+from browser.browser import run_browser
 
 from file_upload.upload_files import upload_files
 

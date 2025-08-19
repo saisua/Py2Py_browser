@@ -1,6 +1,6 @@
 from sqlalchemy import Column, String, Integer, DateTime, CheckConstraint
 
-from .base import Base
+from ..base import Base
 
 
 class Groups(Base):

@@ -9,7 +9,7 @@ from config import (
     PEERTYPE_MYSELF,
 )
 
-from db.peers import Peers
+from db.models.peers import Peers
 
 from encryption.utils.load_encryption_keys import _load_encryption_keys
 

@@ -101,6 +101,7 @@ class InformationRequest(Request):
         sid,
         hashes: dict[str, int | list[int]],
         requested_peer_addrs: list[str],
+        own_sid: int | None = None,
     ):
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(f"Sending information request to {addr}")
@@ -117,4 +118,5 @@ class InformationRequest(Request):
             sid,
             request,
             large_response=False,
+            own_sid=own_sid,
         )

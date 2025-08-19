@@ -19,6 +19,7 @@ async def decrypt_message(session_maker, encrypted_message, sid):
 
     store, peer_address = await generate_peer_store(session_maker, sid)
 
+    # Deserialize the encrypted message before decryption
     message = session_cipher.message_decrypt(
         store,
         peer_address,

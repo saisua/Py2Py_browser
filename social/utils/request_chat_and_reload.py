@@ -12,8 +12,8 @@ from config import (
 
 from utils.hash_str import _hash_str
 
-from db.group_members import GroupMembers
-from db.peers import Peers
+from db.models.group_members import GroupMembers
+from db.models.peers import Peers
 from db.utils.execute import _session_execute
 
 from p2p.requests.chat_request import ChatRequest
@@ -52,6 +52,15 @@ async def request_chat_and_reload(
             if logger.isEnabledFor(logging.INFO):
                 logger.info(f"Found {len(peers)} peers in chat {chat_hash}")
 
+            if len(peers) != 0:
+                own_sid = await _session_execute(
+                    chat_widget.app._session_maker,
+                    select(Peers.sid).where(
+                        Peers.type == PEERTYPE_MYSELF
+                    ),
+                    scalar=True,
+                )
+
             chat_request_coros = []
             for peer in peers:
                 if logger.isEnabledFor(logging.INFO):
@@ -63,7 +72,8 @@ async def request_chat_and_reload(
                         peer.sid,
                         chat_hash,
                         first_message,
-                        last_message
+                        last_message,
+                        own_sid=own_sid,
                     )
                 )
 

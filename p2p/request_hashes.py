@@ -12,7 +12,7 @@ from config import (
 
 from p2p.requests.data_request import DataRequest
 
-from db.peers import Peers
+from db.models.peers import Peers
 
 from files.utils.store_bytes import _store_bytes
 from files.utils.decompress import decompress as decompress_data
